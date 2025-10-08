@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MailBot Settings</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="popup-root">
+    <h2>MailBot Settings</h2>
+    
+    <!-- Personal Information Section -->
+    <div class="section">
+      <h3>Personal Information</h3>
+      
+      <label for="full-name">Full Name <span class="required">*</span></label>
+      <input type="text" id="full-name" placeholder="e.g., Peter Benjamin Parker" />
+      <small>Used for email signatures (separate names with spaces)</small>
+    </div>
+    
+    <!-- Email Preferences Section -->
+    <div class="section">
+      <h3>Email Preferences</h3>
+      
+      <label for="tone-select">Default Tone</label>
+      <select id="tone-select">
+        <option value="neutral">Neutral</option>
+        <option value="friendly">Friendly</option>
+        <option value="formal">Formal</option>
+        <option value="concise">Concise</option>
+      </select>
+      
+      <label for="email-length">Preferred Length</label>
+      <select id="email-length">
+        <option value="short">Short</option>
+        <option value="medium">Medium</option>
+        <option value="long">Long</option>
+      </select>
+    </div>
+    
+    <!-- Common Phrases Section -->
+    <div class="section">
+      <h3>Common Phrases</h3>
+      
+      <label for="preferred-greetings">Greetings (up to 3)</label>
+      <input type="text" id="preferred-greetings" placeholder="Hi, Hello, Good day" />
+      <small>Separate with commas</small>
+      
+      <label for="preferred-closings">Closings (up to 3)</label>
+      <input type="text" id="preferred-closings" placeholder="Sincerely, Best regards" />
+      <small>Separate with commas</small>
+    </div>
+    
+    <!-- Buttons -->
+    <div class="button-group">
+      <button id="save-btn" class="primary">Save Settings</button>
+    </div>
+    
+    <div id="status-message" class="status-message"></div>
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

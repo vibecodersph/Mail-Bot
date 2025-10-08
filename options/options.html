@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MailBot Options</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <h2>MailBot Settings</h2>
+    <p class="subtitle">Customize how MailBot generates your emails</p>
+    
+    <div class="section">
+      <h3>Personal Information</h3>
+      
+      <div class="form-group">
+        <label for="full-name">Full Name <span class="required">*</span></label>
+        <input type="text" id="full-name" placeholder="e.g., Joseph Guerrero" />
+        <small>This will be used for email signatures</small>
+      </div>
+    </div>
+    
+    <div class="section">
+      <h3>Email Preferences</h3>
+      
+      <div class="form-group">
+        <label for="default-tone">Default Tone</label>
+        <select id="default-tone">
+          <option value="neutral">Neutral</option>
+          <option value="friendly">Friendly</option>
+          <option value="formal">Formal</option>
+          <option value="concise">Concise</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="email-length">Preferred Email Length</label>
+        <select id="email-length">
+          <option value="short">Short (Brief and to the point)</option>
+          <option value="average">Average (Balanced detail)</option>
+          <option value="long">Long (Detailed and thorough)</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="section">
+      <h3>Common Phrases</h3>
+      
+      <div class="form-group">
+        <label for="preferred-greetings">Preferred Greetings (up to 3)</label>
+        <input type="text" id="preferred-greetings" placeholder="e.g., Hi, Hello, Good day" />
+        <small>Separate multiple greetings with commas</small>
+      </div>
+      
+      <div class="form-group">
+        <label for="preferred-closings">Preferred Closings (up to 3)</label>
+        <input type="text" id="preferred-closings" placeholder="e.g., Sincerely, Best regards, Cheers" />
+        <small>Separate multiple closings with commas</small>
+      </div>
+    </div>
+    
+    <div class="button-group">
+      <button id="save-btn" class="primary">Save Settings</button>
+      <button id="reset-btn" class="secondary">Reset to Defaults</button>
+    </div>
+    
+    <div id="status-message" class="status-message"></div>
+  </div>
+  
+  <script type="module" src="options.js"></script>
+</body>
+</html>
