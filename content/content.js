@@ -664,21 +664,25 @@ LANGUAGE REQUIREMENT
 ═══════════════════════════════════════
 DETECTED CONVERSATION LANGUAGE: ${detectedLanguage}
 
-⚠️ IMPORTANT: Write your response in ${detectedLanguage}.
+⚠️ CRITICAL: Write your ENTIRE response in ${detectedLanguage}.
 - Match the language used in the conversation history below
 - If the user specifies a different language in their intent, use that instead
 - Otherwise, ALWAYS use ${detectedLanguage} to maintain conversation consistency
+- Translate ALL parts of the email including greetings, body, and closings to ${detectedLanguage}
 
 ═══════════════════════════════════════
 USER PREFERENCES
 ═══════════════════════════════════════
-GREETING OPTIONS: ${greetings.join(', ')}
-- Choose one of these greetings to start the email
-- Or use a contextually appropriate greeting
+GREETING OPTIONS (translate to ${detectedLanguage} if needed): ${greetings.join(', ')}
+- If writing in ${detectedLanguage} and it's not English, translate these greetings appropriately
+- Choose a culturally appropriate greeting for ${detectedLanguage}
+- Examples: "Hi" → Spanish: "Hola", French: "Bonjour", German: "Hallo"
 
-CLOSING OPTIONS: ${closings.join(', ')}
-- Choose one of these closings to end the email
-- Sign with: ${userDisplayName}
+CLOSING OPTIONS (translate to ${detectedLanguage} if needed): ${closings.join(', ')}
+- If writing in ${detectedLanguage} and it's not English, translate these closings appropriately
+- Choose a culturally appropriate closing for ${detectedLanguage}
+- Examples: "Best regards" → Spanish: "Saludos cordiales", French: "Cordialement", German: "Mit freundlichen Grüßen"
+- Always sign with: ${userDisplayName}
 
 EMAIL LENGTH: ${lengthInstructions[emailLength]}
 
@@ -728,12 +732,14 @@ CRITICAL REMINDERS:
 ❌ DO NOT include "Subject: Re: ..." in the email body
 ❌ DO NOT sign with "${recipientName}" - that's the RECIPIENT, not you!
 ❌ DO NOT sign with "${recipientEmail}" - that's who you're writing TO!
+❌ DO NOT use English greetings/closings if writing in ${detectedLanguage} (unless it's English)
 ✓ DO write from ${userDisplayName}'s perspective using first-person
 ✓ DO address ${recipientName} or use general greetings
-✓ DO use one of these greetings: ${greetings.join(', ')}
-✓ DO use one of these closings: ${closings.join(', ')}
+✓ DO translate greetings to ${detectedLanguage}: ${greetings.join(', ')} → use appropriate ${detectedLanguage} equivalents
+✓ DO translate closings to ${detectedLanguage}: ${closings.join(', ')} → use appropriate ${detectedLanguage} equivalents
 ✓ DO sign with "${userDisplayName}" or just your first name
 ✓ YOU ARE ${userDisplayName}, NOT ${recipientName}
+✓ EVERYTHING must be in ${detectedLanguage} - greetings, body, AND closings
 
 ═══════════════════════════════════════
 YOUR EMAIL REPLY (from ${userEmail} to ${recipientEmail}):
