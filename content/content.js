@@ -472,6 +472,66 @@ function fixSignature(generatedEmail, userDisplayName, recipientEmail) {
 }
 
 /**
+ * Detect the primary language used in the email thread
+ * @param {Array} emails - Array of email objects with content
+ * @returns {string} Language description for AI prompt
+ */
+function detectConversationLanguage(emails) {
+  if (!emails || emails.length === 0) {
+    return 'English';
+  }
+  
+  // Collect all email content
+  const allContent = emails.map(email => email.content).join(' ');
+  
+  // Simple heuristic: check for common non-English characters/patterns
+  const hasJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(allContent);
+  const hasChinese = /[\u4E00-\u9FFF]/.test(allContent) && !hasJapanese;
+  const hasKorean = /[\uAC00-\uD7AF]/.test(allContent);
+  const hasArabic = /[\u0600-\u06FF]/.test(allContent);
+  const hasCyrillic = /[\u0400-\u04FF]/.test(allContent);
+  const hasGreek = /[\u0370-\u03FF]/.test(allContent);
+  const hasThai = /[\u0E00-\u0E7F]/.test(allContent);
+  const hasHebrew = /[\u0590-\u05FF]/.test(allContent);
+  
+  // Common Spanish/French/German/Italian characters (with accents)
+  const hasRomanceAccents = /[àáâãäåèéêëìíîïòóôõöùúûüýÿñçÀÁÂÃÄÅÈÉÊËÌÍÎÏÒÓÔÕÖÙÚÛÜÝŸÑÇ]/.test(allContent);
+  
+  if (hasJapanese) {
+    console.log('[MailBot] Detected language: Japanese');
+    return 'Japanese';
+  } else if (hasChinese) {
+    console.log('[MailBot] Detected language: Chinese');
+    return 'Chinese';
+  } else if (hasKorean) {
+    console.log('[MailBot] Detected language: Korean');
+    return 'Korean';
+  } else if (hasArabic) {
+    console.log('[MailBot] Detected language: Arabic');
+    return 'Arabic';
+  } else if (hasCyrillic) {
+    console.log('[MailBot] Detected language: Russian or other Cyrillic script');
+    return 'Russian (or other Cyrillic script language)';
+  } else if (hasGreek) {
+    console.log('[MailBot] Detected language: Greek');
+    return 'Greek';
+  } else if (hasThai) {
+    console.log('[MailBot] Detected language: Thai');
+    return 'Thai';
+  } else if (hasHebrew) {
+    console.log('[MailBot] Detected language: Hebrew');
+    return 'Hebrew';
+  } else if (hasRomanceAccents) {
+    // Could be Spanish, French, Portuguese, Italian, etc.
+    console.log('[MailBot] Detected language: Spanish/French/Portuguese/Italian (Romance language)');
+    return 'the same language as the conversation (Spanish, French, Portuguese, Italian, or other Romance language based on context)';
+  } else {
+    console.log('[MailBot] Detected language: English (default)');
+    return 'English';
+  }
+}
+
+/**
  * Generate reply using Gemini Nano with enhanced context and validation
  * @param {Object} threadContext - Enhanced thread context with conversation state
  * @param {string} userIntent - What the user wants to say
@@ -576,6 +636,9 @@ This is attempt ${attemptNumber} - previous attempt had identity confusion. Be e
   // Build conversation history
   const conversationHistory = buildConversationHistory(threadContext.emails);
   
+  // Detect conversation language
+  const detectedLanguage = detectConversationLanguage(threadContext.emails);
+  
   // Build comprehensive prompt
   const prompt = `You are writing an email on behalf of ${userEmail}.
 Your name is: ${userDisplayName}
@@ -595,6 +658,16 @@ RECIPIENT IDENTITY: ${recipientEmail}
 - This is who you are writing TO
 - Address them in the email (or use "Hi", "Hello")
 - DO NOT address yourself (${userDisplayName})
+
+═══════════════════════════════════════
+LANGUAGE REQUIREMENT
+═══════════════════════════════════════
+DETECTED CONVERSATION LANGUAGE: ${detectedLanguage}
+
+⚠️ IMPORTANT: Write your response in ${detectedLanguage}.
+- Match the language used in the conversation history below
+- If the user specifies a different language in their intent, use that instead
+- Otherwise, ALWAYS use ${detectedLanguage} to maintain conversation consistency
 
 ═══════════════════════════════════════
 USER PREFERENCES
@@ -1066,6 +1139,7 @@ function attachMailBotButton(editableField, type = 'dialog') {
     input.style.fontFamily = 'inherit';
     input.style.outline = 'none';
     input.style.transition = 'all 0.2s ease';
+    input.style.cursor = 'text';  // Text cursor to indicate it's an input field
     
     // Placeholder styling
     input.style.setProperty('::placeholder', 'color: rgba(255,255,255,0.5)');
@@ -1213,6 +1287,23 @@ function attachMailBotButton(editableField, type = 'dialog') {
         expandedPanel.style.transition = 'opacity 0.2s ease';
         expandedPanel.style.opacity = '1';
         
+        // Restore preview AFTER expanded panel finishes fading in
+        if (generatedText) {
+          setTimeout(() => {
+            previewContainer.style.display = 'block';
+            previewContainer.style.opacity = '0';
+            
+            // Trigger reflow
+            previewContainer.offsetHeight;
+            
+            // Fade in preview
+            previewContainer.style.transition = 'opacity 0.2s ease';
+            previewContainer.style.opacity = '1';
+            positionPreview();
+            console.log('[MailBot] Restored previous work');
+          }, 200); // Wait for expanded panel fade to complete
+        }
+        
         input.focus(); // Auto-focus input
       }, 200); // Match fade out duration
       
@@ -1245,12 +1336,11 @@ function attachMailBotButton(editableField, type = 'dialog') {
         btn.style.transition = 'opacity 0.2s ease';
         btn.style.opacity = '1';
         
-        input.value = ''; // Clear input
-        previewContent.textContent = ''; // Clear preview
-        generatedText = null; // Clear generated text
+        // DO NOT clear input or generated text - preserve user's work!
+        // input.value and generatedText are retained so user can resume
       }, 200); // Match fade out duration
       
-      console.log('[MailBot] Collapsed UI');
+      console.log('[MailBot] Collapsed UI - work preserved');
     }
     
     // Position preview container below expanded panel
@@ -1531,7 +1621,7 @@ function attachMailBotButton(editableField, type = 'dialog') {
         btn.style.cursor = 'grab';
         btn.style.transition = 'all 0.2s ease';
       } else {
-        expandedPanel.style.cursor = 'default';
+        expandedPanel.style.cursor = 'grab';  // Keep grab cursor to show it's still draggable
         expandedPanel.style.transition = 'all 0.2s ease';
       }
       
@@ -1543,14 +1633,12 @@ function attachMailBotButton(editableField, type = 'dialog') {
         );
         
         if (moveDistance < 5) {
-          // This was a click, not a drag - expand the panel and reset positioning
-          customPosition = null;
-          userHasManuallyPositioned = false; // Reset manual positioning flag
+          // This was a click, not a drag - expand the panel
+          // DO NOT reset customPosition - preserve user's chosen location!
           expandPanel();
         }
       } else if (isCollapsed && !customPosition) {
         // No drag started, treat as click
-        userHasManuallyPositioned = false; // Reset manual positioning flag
         expandPanel();
       }
       
