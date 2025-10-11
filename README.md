@@ -1,5 +1,7 @@
 # MailBot - AI-Powered Gmail Assistant
 
+![MailBot OG Image](assets/og-image.png)
+
 MailBot is a Chrome extension that uses Gemini Nano (Chrome's built-in on-device AI) to help you draft contextual email replies in Gmail.
 
 ## Features
