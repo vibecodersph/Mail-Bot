@@ -1092,6 +1092,25 @@ function attachMailBotButton(editableField, type = 'dialog') {
     btn.style.alignItems = 'center';
     btn.style.justifyContent = 'center';
     btn.style.padding = '10px 20px';  // Slightly less padding for compact look
+    // Load custom fonts
+    const ndotFontUrl = chrome.runtime.getURL('assets/NDot55Caps.otf');
+    const ndotFontFace = new FontFace('NDot55Caps', `url(${ndotFontUrl})`);
+    ndotFontFace.load().then((loadedFace) => {
+      document.fonts.add(loadedFace);
+      console.log('[MailBot] NDot55Caps font loaded successfully');
+    }).catch((error) => {
+      console.warn('[MailBot] Failed to load NDot55Caps font:', error);
+    });
+    
+    const ntypeFontUrl = chrome.runtime.getURL('assets/NType82-Headline.otf');
+    const ntypeFontFace = new FontFace('NType82', `url(${ntypeFontUrl})`);
+    ntypeFontFace.load().then((loadedFace) => {
+      document.fonts.add(loadedFace);
+      console.log('[MailBot] NType82 font loaded successfully');
+    }).catch((error) => {
+      console.warn('[MailBot] Failed to load NType82 font:', error);
+    });
+    
     btn.style.background = '#000000';
     btn.style.color = 'rgba(255, 255, 255, 0.8)';  // Slightly dimmed white text (80% opacity)
     btn.style.border = '1.5px solid #000000';
@@ -1101,7 +1120,7 @@ function attachMailBotButton(editableField, type = 'dialog') {
     btn.style.fontWeight = '500';
     btn.style.letterSpacing = '0.3px';
     btn.style.transition = 'all 0.2s ease';
-    btn.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+    btn.style.fontFamily = '"NType82", system-ui, -apple-system, "Segoe UI", sans-serif';
     btn.style.whiteSpace = 'nowrap';
     btn.style.height = '60px';  // Compact height
     btn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';  // Subtle shadow for depth
@@ -1114,7 +1133,7 @@ function attachMailBotButton(editableField, type = 'dialog') {
     expandedPanel.style.borderRadius = '16px';  // Match button's rounded rectangular shape
     expandedPanel.style.padding = '10px 20px';  // Match button padding
     expandedPanel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
-    expandedPanel.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+    expandedPanel.style.fontFamily = '"NType82", system-ui, -apple-system, "Segoe UI", sans-serif';
     expandedPanel.style.minWidth = '500px';
     expandedPanel.style.display = 'flex';
     expandedPanel.style.alignItems = 'center';
@@ -1132,6 +1151,7 @@ function attachMailBotButton(editableField, type = 'dialog') {
     label.style.marginRight = '8px';
     label.style.cursor = 'grab';  // Label is draggable
     label.style.opacity = '0.8';  // Slightly dimmed
+    label.style.fontFamily = '"NType82", system-ui, -apple-system, "Segoe UI", sans-serif';
     
     // Style input - Dark with white text
     const input = expandedPanel.querySelector('.mailbot-input');
@@ -1142,7 +1162,7 @@ function attachMailBotButton(editableField, type = 'dialog') {
     input.style.border = '1.5px solid #333333';
     input.style.borderRadius = '20px';  // Rounded rectangular
     input.style.fontSize = '14px';
-    input.style.fontFamily = 'inherit';
+    input.style.fontFamily = '"NType82", system-ui, -apple-system, "Segoe UI", sans-serif';
     input.style.outline = 'none';
     input.style.transition = 'all 0.2s ease';
     input.style.cursor = 'text';  // Text cursor to indicate it's an input field
@@ -1179,6 +1199,7 @@ function attachMailBotButton(editableField, type = 'dialog') {
     generateBtn.style.transition = 'all 0.2s ease';
     generateBtn.style.whiteSpace = 'nowrap';
     generateBtn.style.letterSpacing = '0.3px';
+    generateBtn.style.fontFamily = '"NType82", system-ui, -apple-system, "Segoe UI", sans-serif';
     
     generateBtn.addEventListener('mouseenter', () => {
       generateBtn.style.background = '#e8e8e8';
@@ -1203,6 +1224,7 @@ function attachMailBotButton(editableField, type = 'dialog') {
     insertBtn.style.transition = 'all 0.2s ease';
     insertBtn.style.whiteSpace = 'nowrap';
     insertBtn.style.letterSpacing = '0.3px';
+    insertBtn.style.fontFamily = '"NType82", system-ui, -apple-system, "Segoe UI", sans-serif';
     
     insertBtn.addEventListener('mouseenter', () => {
       insertBtn.style.background = '#e8e8e8';
@@ -1247,7 +1269,7 @@ function attachMailBotButton(editableField, type = 'dialog') {
     previewContainer.style.borderRadius = '16px';
     previewContainer.style.padding = '16px 20px';
     previewContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
-    previewContainer.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+    previewContainer.style.fontFamily = '"NType82", system-ui, -apple-system, "Segoe UI", sans-serif';
     previewContainer.style.minWidth = '500px';
     previewContainer.style.maxWidth = '700px';
     previewContainer.style.marginTop = '8px';
