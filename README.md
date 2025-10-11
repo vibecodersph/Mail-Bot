@@ -16,50 +16,75 @@ MailBot is a Chrome extension that uses Gemini Nano (Chrome's built-in on-device
 
 ### Prerequisites
 
-1. **Chrome Canary or Chrome Dev** (version 127 or higher)
-   - Download: https://www.google.com/chrome/canary/
-   - Or: https://www.google.com/chrome/dev/
+1. **Chrome Browser** (latest stable version)
+   - Make sure Chrome is fully updated
+   - Go to `chrome://settings/help` to check for updates
+   - Download: https://www.google.com/chrome/
 
-2. **Enable AI Features**:
+2. **Enable Developer Mode**:
+   - Go to `chrome://extensions`
+   - Toggle **"Developer mode"** on (top right corner)
+
+3. **Enable All Gemini Nano Flags**:
+   - Go to `chrome://flags`
+   - Search for "gemini" or "nano" and enable ALL the following flags:
    
-   **Step 1:** Enable the Optimization Guide
-   - Go to `chrome://flags/#optimization-guide-on-device-model`
-   - Set to **"Enabled BypassPerfRequirement"**
+   | Flag | Setting |
+   |------|--------|
+   | **Enables optimization guide on device** | `Enabled BypassPerfRequirement` |
+   | **Prompt API for Gemini Nano** | `Enabled` |
+   | **Prompt API for Gemini Nano with Multimodal Input** | `Enabled` |
+   | **Summarization API for Gemini Nano** | `Enabled Multilingual` |
+   | **Writer API for Gemini Nano** | `Enabled Multilingual` |
+   | **Rewriter API for Gemini Nano** | `Enabled Multilingual` |
+   | **Proofreader API for Gemini Nano** | `Enabled` |
    
-   **Step 2:** Enable Prompt API
-   - Go to `chrome://flags/#prompt-api-for-gemini-nano`
-   - Set to **"Enabled"**
-   
-   **Step 3:** Restart Chrome
-   
-   **Step 4:** Download the AI Model
+   - Click **"Relaunch"** to restart Chrome
+
+4. **Download the AI Model**:
    - Go to `chrome://components`
-   - Find "Optimization Guide On Device Model"
+   - Find **"Optimization Guide On Device Model"**
    - Click **"Check for update"**
    - Wait for the model to download (may take 5-10 minutes)
-   - The version should show a number (e.g., 2024.10.7.1234)
+   - The version should show something like: `2025.8.8.1141`
 
-3. **Verify AI is Working**:
-   - Open DevTools (F12) in any tab
-   - In the Console, type: `await ai.languageModel.capabilities()`
-   - You should see: `{ available: "readily" }`
-   - If you see `"after-download"`, wait for the model to finish downloading
+5. **Verify Model is Ready**:
+   - Go to `chrome://on-device-internals/`
+   - Click **"Model Status"** tab
+   - Scroll down and wait until these show **"Ready"** status:
+     - `OPTIMIZATION_TARGET_LANGUAGE_DETECTION`
+     - `OPTIMIZATION_TARGET_TEXT_SAFETY`
+   - ⚠️ **Important**: Do not proceed until both show "Ready"
 
 ## Installation
 
-1. Clone this repository:
+1. **Download MailBot**:
    ```bash
-   git clone https://github.com/yourusername/mail-bot.git
-   cd mail-bot
+   git clone https://github.com/vibecodersph/Mail-Bot
+   cd Mail-Bot
    ```
+   Or download and extract the ZIP from GitHub
 
-2. Load the extension in Chrome:
-   - Open `chrome://extensions`
-   - Enable "Developer mode" (top right)
-   - Click "Load unpacked"
-   - Select the `mail-bot` folder
+2. **Load the Extension**:
+   - Go to `chrome://extensions`
+   - Make sure **"Developer mode"** is enabled (see Prerequisites above)
+   - Click **"Load unpacked"**
+   - Select the `Mail-Bot` folder (the one containing `manifest.json`)
+   - MailBot should now appear in your extensions list
 
-3. Navigate to Gmail and start using MailBot!
+3. **Configure Settings**:
+   - Click the MailBot icon in Chrome toolbar
+   - Enter your **Full Name** (for email signatures)
+   - Set your preferred **Tone** (Neutral, Friendly, Formal, or Concise)
+   - Set your preferred **Email Length** (Short, Average, or Long)
+   - (Optional) Add custom greetings and closings
+   - Click **"Save Settings"**
+
+4. **Start Using MailBot**:
+   - Navigate to Gmail (mail.google.com)
+   - Open any email and click "Reply"
+   - You should see the black **MailBot button** appear above the compose field
+   - Click it and start generating emails!
 
 ## Usage
 
@@ -83,13 +108,16 @@ MailBot is a Chrome extension that uses Gemini Nano (Chrome's built-in on-device
 
 **Check the following:**
 
-1. Are you using Chrome Canary/Dev 127+?
-2. Are both flags enabled? (see Requirements above)
+1. Is Chrome fully updated to the latest stable version?
+2. Are ALL 7 Gemini Nano flags enabled? (see Prerequisites above)
 3. Did you restart Chrome after enabling flags?
-4. Is the model downloaded?
+4. Is the model downloaded and ready?
    - Go to `chrome://components`
    - Look for "Optimization Guide On Device Model"
-   - Should show a version number and status
+   - Should show version like `2025.8.8.1141`
+5. Are the model targets ready?
+   - Go to `chrome://on-device-internals/`
+   - Check that `OPTIMIZATION_TARGET_LANGUAGE_DETECTION` and `OPTIMIZATION_TARGET_TEXT_SAFETY` show "Ready"
 
 ### "Model is downloading"
 
@@ -153,10 +181,10 @@ mail-bot/
 
 ## Known Limitations
 
-- Requires Chrome Canary/Dev with Gemini Nano enabled
-- Model download is ~1-2GB
+- Requires Chrome with Gemini Nano enabled (see Prerequisites)
+- Model download is ~1-2GB and requires waiting for "Ready" status
 - Only works in Gmail (mail.google.com)
-- Inline replies only (not pop-out compose windows yet)
+- Works with compose, reply, and forward windows
 
 ## Roadmap
 
