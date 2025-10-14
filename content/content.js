@@ -128,13 +128,245 @@ function getUserDisplayName(userEmail) {
   return capitalized;
 }
 
+const EMAIL_REGEX = /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/i;
+
+/**
+ * Normalize a recipient display name, falling back to email username when needed
+ * @param {string|null} rawName
+ * @param {string} email
+ * @returns {string}
+ */
+function cleanRecipientName(rawName, email) {
+  if (!rawName) {
+    return email ? email.split('@')[0] : 'Recipient';
+  }
+
+  let name = rawName.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+
+  if (!name || name.length < 2 || name.includes('@') || name.startsWith(':') || name.toLowerCase() === email) {
+    return email ? email.split('@')[0] : 'Recipient';
+  }
+
+  return name;
+}
+
+/**
+ * Extract recipient candidates from a Gmail message element
+ * @param {HTMLElement} msgEl
+ * @returns {Array<{email: string, name: string}>}
+ */
+function extractRecipientsFromMessage(msgEl) {
+  if (!msgEl) {
+    return [];
+  }
+
+  const selectors = [
+    '.g2 [email]',
+    '.g2 [data-email]',
+    '.g2 [data-hovercard-id*="@"]',
+    '.gU span[email]',
+    '.eG span[email]',
+    '.h7 span[email]',
+    '.g3 span[email]',
+    '[data-tooltip*="to"] span[email]',
+    '[data-tooltip="To"] [email]'
+  ];
+
+  const seen = new Map();
+
+  const addRecipient = el => {
+    if (!el) {
+      return;
+    }
+
+    const attributeCandidates = [
+      el.getAttribute('data-hovercard-id'),
+      el.getAttribute('email'),
+      el.getAttribute('data-email')
+    ];
+
+    let emailCandidate = attributeCandidates.find(Boolean) || '';
+    emailCandidate = emailCandidate.trim();
+
+    let emailMatch = emailCandidate.match(EMAIL_REGEX);
+    if (!emailMatch) {
+      const text = el.textContent || '';
+      emailMatch = text.match(EMAIL_REGEX);
+    }
+
+    if (!emailMatch) {
+      return;
+    }
+
+    let email = emailMatch[0].toLowerCase().replace(/^mailto:/i, '');
+    if (!email || seen.has(email)) {
+      return;
+    }
+
+    const rawName = el.getAttribute('name') || el.textContent;
+    const name = cleanRecipientName(rawName, email);
+
+    seen.set(email, { email, name });
+  };
+
+  selectors.forEach(selector => {
+    msgEl.querySelectorAll(selector).forEach(addRecipient);
+  });
+
+  if (seen.size === 0) {
+    const headerContainer = msgEl.querySelector('.hb, .ha');
+    headerContainer?.querySelectorAll('span[email], [data-hovercard-id], [data-email]')?.forEach(addRecipient);
+  }
+
+  return Array.from(seen.values());
+}
+
+/**
+ * Attempt to locate the Gmail message element and identifiers associated with a compose field
+ * @param {HTMLElement} editableField - The compose field element
+ * @returns {{messageElement: HTMLElement|null, legacyMessageId: string|null, messageId: string|null, threadIndex: number|null}}
+ */
+function findMessageMetadataForEditable(editableField) {
+  const metadata = {
+    messageElement: null,
+    legacyMessageId: null,
+    messageId: null,
+    threadIndex: null
+  };
+
+  if (!editableField || editableField.nodeType !== Node.ELEMENT_NODE) {
+    return metadata;
+  }
+
+  const candidateNodes = [];
+
+  let current = editableField;
+  while (current && current !== document.body) {
+    if (current.nodeType === Node.ELEMENT_NODE) {
+      candidateNodes.push(current);
+    }
+    current = current.parentElement;
+  }
+
+  current = editableField.previousElementSibling;
+  let guard = 0;
+  while (current && guard < 6) {
+    if (current.nodeType === Node.ELEMENT_NODE) {
+      candidateNodes.push(current);
+    }
+    current = current.previousElementSibling;
+    guard += 1;
+  }
+
+  const scanElement = el => {
+    if (!el || el.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+
+    const element = el;
+
+    if (!metadata.messageElement && element.classList?.contains('adn')) {
+      metadata.messageElement = element;
+    }
+
+    if (!metadata.legacyMessageId) {
+      const legacyAttr = element.getAttribute?.('data-legacy-message-id');
+      if (legacyAttr) {
+        metadata.legacyMessageId = legacyAttr;
+      }
+    }
+
+    if (!metadata.messageId) {
+      const messageAttr = element.getAttribute?.('data-message-id');
+      if (messageAttr) {
+        metadata.messageId = messageAttr;
+      }
+    }
+
+    if ((!metadata.messageElement || !metadata.legacyMessageId || !metadata.messageId) && element.querySelector) {
+      if (!metadata.messageElement) {
+        const ancestor = element.closest?.('.adn');
+        if (ancestor) {
+          metadata.messageElement = ancestor;
+        }
+      }
+
+      if (!metadata.legacyMessageId) {
+        const legacyHolder = element.querySelector('[data-legacy-message-id]');
+        if (legacyHolder) {
+          metadata.legacyMessageId = legacyHolder.getAttribute('data-legacy-message-id');
+          if (!metadata.messageElement) {
+            metadata.messageElement = legacyHolder.closest('.adn') || legacyHolder;
+          }
+        }
+      }
+
+      if (!metadata.messageId) {
+        const messageHolder = element.querySelector('[data-message-id]');
+        if (messageHolder) {
+          metadata.messageId = messageHolder.getAttribute('data-message-id');
+          if (!metadata.messageElement) {
+            metadata.messageElement = messageHolder.closest('.adn') || messageHolder;
+          }
+        }
+      }
+    }
+  };
+
+  candidateNodes.forEach(scanElement);
+
+  if (!metadata.messageElement) {
+    const fallback = editableField.closest?.('.adn, .adp, .nH[role="region"]');
+    if (fallback) {
+      metadata.messageElement = fallback.classList?.contains('adn')
+        ? fallback
+        : fallback.querySelector?.('.adn');
+    }
+  }
+
+  if (metadata.messageElement && metadata.messageElement.querySelector) {
+    if (!metadata.legacyMessageId) {
+      const holder = metadata.messageElement.querySelector('[data-legacy-message-id]');
+      if (holder) {
+        metadata.legacyMessageId = holder.getAttribute('data-legacy-message-id');
+      }
+    }
+    if (!metadata.messageId) {
+      const holder = metadata.messageElement.querySelector('[data-message-id]');
+      if (holder) {
+        metadata.messageId = holder.getAttribute('data-message-id');
+      }
+    }
+  }
+
+  if (metadata.messageElement) {
+    const allMessages = Array.from(document.querySelectorAll('.adn.ads'));
+    const directIndex = allMessages.indexOf(metadata.messageElement);
+    if (directIndex !== -1) {
+      metadata.threadIndex = directIndex;
+    } else {
+      const parentMessage = metadata.messageElement.closest?.('.adn.ads');
+      if (parentMessage) {
+        const parentIndex = allMessages.indexOf(parentMessage);
+        if (parentIndex !== -1) {
+          metadata.messageElement = parentMessage;
+          metadata.threadIndex = parentIndex;
+        }
+      }
+    }
+  }
+
+  return metadata;
+}
+
 /**
  * Analyze conversation state to understand who's waiting for whom
  * @param {Array} emailThread - Array of email objects with from/to/content
  * @param {string} currentUserEmail - The logged-in user's email
+ * @param {number|null} replyingToIndex - Index of the message we're replying to (null = replying at end)
  * @returns {Object} Conversation state analysis
  */
-function analyzeConversationState(emailThread, currentUserEmail) {
+function analyzeConversationState(emailThread, currentUserEmail, replyingToIndex = null) {
   if (!emailThread || emailThread.length === 0) {
     return {
       lastSenderWasUser: false,
@@ -147,102 +379,347 @@ function analyzeConversationState(emailThread, currentUserEmail) {
       threadLength: 0
     };
   }
-  
-  const lastEmail = emailThread[emailThread.length - 1];
-  const secondLastEmail = emailThread.length > 1 ? emailThread[emailThread.length - 2] : null;
-  
-  const lastSenderWasUser = lastEmail.isFromUser;
-  const isFollowUp = lastSenderWasUser && secondLastEmail?.isFromUser;
-  
-  // Determine who should receive the reply and their display name
-  let recipientEmail, recipientName;
-  if (lastSenderWasUser) {
-    // If user sent the last email, we're following up with the same recipient
-    recipientEmail = lastEmail.to;
-    recipientName = lastEmail.toName;
+
+  // Determine which email we're responding to
+  let targetEmail;
+  if (replyingToIndex !== null && replyingToIndex >= 0 && replyingToIndex < emailThread.length) {
+    // Replying to a specific message in the middle of the thread
+    targetEmail = emailThread[replyingToIndex];
+    console.log('[MailBot] 📧 Replying to message in middle of thread:', {
+      from: targetEmail.from,
+      fromName: targetEmail.fromName,
+      index: replyingToIndex
+    });
   } else {
-    // If someone else sent the last email, reply to them
-    recipientEmail = lastEmail.from;
-    recipientName = lastEmail.fromName;
+    // Replying at the end of the thread (default behavior)
+    targetEmail = emailThread[emailThread.length - 1];
+    console.log('[MailBot] 📧 Replying at end of thread to:', {
+      from: targetEmail.from,
+      fromName: targetEmail.fromName
+    });
   }
-  
+
+  const currentUserEmailLower = currentUserEmail?.toLowerCase() || null;
+  const secondLastEmail = emailThread.length > 1 ? emailThread[emailThread.length - 2] : null;
+  const lastSenderWasUser = targetEmail.isFromUser;
+  const isFollowUp = lastSenderWasUser && secondLastEmail?.isFromUser;
+  const recipientCandidates = Array.isArray(targetEmail.toRecipients) ? targetEmail.toRecipients : [];
+
+  let recipientEmail;
+  let recipientName;
+
+  if (lastSenderWasUser) {
+    // If user sent the target email, we're following up with the same recipient (prefer non-user recipients)
+    const nonUserCandidates = currentUserEmailLower
+      ? recipientCandidates.filter(candidate => candidate.email && candidate.email !== currentUserEmailLower)
+      : recipientCandidates.filter(candidate => candidate.email);
+
+    const candidate = nonUserCandidates[0] || recipientCandidates[0];
+    if (candidate) {
+      recipientEmail = candidate.email;
+      recipientName = candidate.name;
+      console.log('[MailBot] 👤 Recipient from your sent message:', recipientName, recipientEmail);
+    } else {
+      console.log('[MailBot] ⚠️ Could not determine recipient directly from your sent message.');
+    }
+  } else {
+    // If someone else sent the target email, reply to them
+    recipientEmail = targetEmail.from;
+    recipientName = targetEmail.fromName;
+    console.log('[MailBot] 👤 Recipient is the person who wrote to YOU:', recipientName, recipientEmail);
+  }
+
+  let needsFallback = !recipientEmail;
+  if (!needsFallback && currentUserEmailLower && recipientEmail === currentUserEmailLower) {
+    needsFallback = true;
+  }
+
+  // Validation & fallback: Make sure we're not addressing ourselves or missing a recipient
+  if (needsFallback) {
+    console.error('[MailBot] ❌ Recipient is missing or set to the current user. Attempting to find correct recipient...');
+
+    for (const email of emailThread) {
+      if (!email.isFromUser && email.from && (!currentUserEmailLower || email.from !== currentUserEmailLower)) {
+        recipientEmail = email.from;
+        recipientName = email.fromName;
+        console.log('[MailBot] ✓ Found alternative recipient from incoming message:', recipientName, recipientEmail);
+        needsFallback = false;
+        break;
+      }
+
+      if (email.isFromUser) {
+        const altRecipient = (email.toRecipients || []).find(candidate => candidate.email && (!currentUserEmailLower || candidate.email !== currentUserEmailLower));
+        if (altRecipient) {
+          recipientEmail = altRecipient.email;
+          recipientName = altRecipient.name;
+          console.log('[MailBot] ✓ Found alternative recipient from your sent message:', recipientName, recipientEmail);
+          needsFallback = false;
+          break;
+        }
+      }
+    }
+  }
+
+  if (needsFallback) {
+    const fallbackCandidate = recipientCandidates.find(candidate => candidate.email && (!currentUserEmailLower || candidate.email !== currentUserEmailLower));
+    if (fallbackCandidate) {
+      recipientEmail = fallbackCandidate.email;
+      recipientName = fallbackCandidate.name;
+      console.log('[MailBot] ✓ Using fallback recipient from candidate list:', recipientName, recipientEmail);
+      needsFallback = false;
+    }
+  }
+
+  if (needsFallback && !lastSenderWasUser && targetEmail.from && (!currentUserEmailLower || targetEmail.from !== currentUserEmailLower)) {
+    recipientEmail = targetEmail.from;
+    recipientName = targetEmail.fromName;
+    needsFallback = false;
+  }
+
+  if (!recipientEmail) {
+    recipientEmail = 'unknown@recipient.com';
+  }
+
+  if (recipientEmail.includes('mailto:')) {
+    recipientEmail = recipientEmail.replace(/^mailto:/i, '');
+  }
+  recipientEmail = recipientEmail.toLowerCase();
+
+  if (!recipientName || recipientName.includes('@') || recipientName.startsWith(':') || recipientName.length < 2) {
+    recipientName = recipientEmail.split('@')[0];
+  }
+
   return {
     lastSenderWasUser,
     isFollowUp, // User is following up on their own email
     waitingForResponse: lastSenderWasUser, // If user sent last, they're waiting
-    respondingTo: lastSenderWasUser ? null : lastEmail.from, // Who we're responding to
+    respondingTo: lastSenderWasUser ? null : targetEmail.from, // Who we're responding to
     conversationStarter: emailThread.length === 1 && lastSenderWasUser,
     recipientEmail,
     recipientName,
+    recipientList: recipientCandidates,
     threadLength: emailThread.length
   };
 }
 
 /**
  * Extract email thread context from the current page with enhanced metadata
+ * @param {HTMLElement} editableField - The compose field we're generating for (optional)
  * @returns {Object} Thread context including subject, messages with sender/recipient info
  */
-function extractThreadContext() {
+function extractThreadContext(editableField = null) {
   const currentUserEmail = getCurrentUserEmail();
+  const currentUserEmailLower = currentUserEmail?.toLowerCase() || null;
   const subject = document.querySelector('h2.hP')?.innerText || 'No subject';
-  
+
   // Extract email messages with sender and recipient information
   const messageElements = Array.from(document.querySelectorAll('.adn.ads'));
   const emails = messageElements.map(msgEl => {
     // Try to extract sender email and name from the message header
     const senderEl = msgEl.querySelector('.gD, .go, [email]');
-    const senderEmail = senderEl?.getAttribute('email') || 
+    const senderEmailRaw = senderEl?.getAttribute('email') || 
                        senderEl?.getAttribute('data-email') ||
-                       senderEl?.textContent?.match(/[\w.-]+@[\w.-]+\.\w+/)?.[0] ||
+                       senderEl?.textContent?.match(EMAIL_REGEX)?.[0] ||
                        'unknown@sender.com';
+    const senderEmail = senderEmailRaw.toLowerCase();
     
     // Extract sender display name (the text shown before the email)
     const senderNameEl = msgEl.querySelector('.gD');
     const senderName = senderNameEl?.getAttribute('name') || 
                       senderNameEl?.textContent?.trim() ||
                       senderEmail.split('@')[0];
+
+    const legacyMessageId = msgEl.getAttribute('data-legacy-message-id') ||
+      msgEl.dataset?.legacyMessageId ||
+      msgEl.querySelector?.('[data-legacy-message-id]')?.getAttribute('data-legacy-message-id') ||
+      null;
+
+    const messageId = msgEl.getAttribute('data-message-id') ||
+      msgEl.dataset?.messageId ||
+      msgEl.querySelector?.('[data-message-id]')?.getAttribute('data-message-id') ||
+      null;
+
+    const domId = msgEl.id || msgEl.getAttribute('id') || null;
     
-    // Try to extract recipient email and name (usually in To: field)
-    const recipientEl = msgEl.querySelector('[data-hovercard-id*="@"]');
-    const recipientEmail = recipientEl?.getAttribute('data-hovercard-id') ||
-                          'unknown@recipient.com';
-    
-    // Extract recipient display name
-    const recipientName = recipientEl?.textContent?.trim() ||
-                         recipientEl?.getAttribute('name') ||
-                         recipientEmail.split('@')[0];
+    const recipients = extractRecipientsFromMessage(msgEl);
+    const filteredRecipients = recipients.filter(recipient => recipient.email);
+    const nonUserRecipients = currentUserEmailLower
+      ? filteredRecipients.filter(recipient => recipient.email !== currentUserEmailLower)
+      : filteredRecipients;
+    const primaryRecipient = nonUserRecipients[0] || filteredRecipients[0] || null;
+
+    let recipientEmail = primaryRecipient?.email || 'unknown@recipient.com';
+    let recipientName = primaryRecipient?.name || recipientEmail.split('@')[0];
+
+    if (recipientName.includes('@') || recipientName.startsWith(':') || recipientName.length < 2) {
+      recipientName = recipientEmail.split('@')[0];
+    }
     
     const content = msgEl.innerText?.substring(0, 1000) || ''; // Limit to 1000 chars
     
     // Determine if this email is from or to the current user
-    const isFromUser = currentUserEmail ? senderEmail === currentUserEmail : false;
-    const isToUser = currentUserEmail ? recipientEmail === currentUserEmail : false;
-    
+    const isFromUser = currentUserEmailLower ? senderEmail === currentUserEmailLower : false;
+    const isToUser = currentUserEmailLower ? filteredRecipients.some(recipient => recipient.email === currentUserEmailLower) : false;
+
+    // Debug log for each message
+    console.log('[MailBot] 📨 Parsed message:', {
+      from: `${senderName} <${senderEmail}>`,
+      to: `${recipientName} <${recipientEmail}>`,
+      recipientCount: filteredRecipients.length,
+      isFromUser,
+      isToUser,
+      legacyMessageId,
+      messageId,
+      domId
+    });
+
     return {
       from: senderEmail,
       fromName: senderName,
       to: recipientEmail,
       toName: recipientName,
+      toRecipients: filteredRecipients,
       content,
       isFromUser,
-      isToUser
+      isToUser,
+      legacyMessageId,
+      messageId,
+      domId,
+      element: msgEl // Keep reference to DOM element
     };
   });
-  
-  // Analyze conversation state
-  const conversationState = analyzeConversationState(emails, currentUserEmail);
-  
+
+  // If we have an editableField, try to find which message we're replying to
+  let replyingToMessageIndex = null;
+  if (editableField && emails.length > 0) {
+    const datasetIndex = editableField.dataset?.mailbotMessageIndex;
+    if (datasetIndex !== undefined) {
+      const numericIndex = parseInt(datasetIndex, 10);
+      if (!Number.isNaN(numericIndex) && emails[numericIndex]) {
+        replyingToMessageIndex = numericIndex;
+        console.log('[MailBot] 🎯 Reply index from stored dataset:', replyingToMessageIndex,
+          'from:', emails[replyingToMessageIndex].fromName);
+      }
+    }
+  }
+
+  if (replyingToMessageIndex === null && editableField && emails.length > 0) {
+    const datasetLegacy = editableField.dataset?.mailbotLegacyMessageId;
+    if (datasetLegacy) {
+      const legacyIndex = emails.findIndex(email => email.legacyMessageId === datasetLegacy);
+      if (legacyIndex !== -1) {
+        replyingToMessageIndex = legacyIndex;
+        console.log('[MailBot] 🎯 Reply index matched via legacy message ID:', replyingToMessageIndex,
+          'from:', emails[replyingToMessageIndex].fromName);
+      }
+    }
+  }
+
+  if (replyingToMessageIndex === null && editableField && emails.length > 0) {
+    const datasetMessageId = editableField.dataset?.mailbotMessageId;
+    if (datasetMessageId) {
+      const messageIdIndex = emails.findIndex(email => email.messageId === datasetMessageId);
+      if (messageIdIndex !== -1) {
+        replyingToMessageIndex = messageIdIndex;
+        console.log('[MailBot] 🎯 Reply index matched via message ID:', replyingToMessageIndex,
+          'from:', emails[replyingToMessageIndex].fromName);
+      }
+    }
+  }
+
+  if (replyingToMessageIndex === null && editableField && emails.length > 0) {
+    const datasetDomId = editableField.dataset?.mailbotMessageDomId;
+    if (datasetDomId) {
+      const domIndex = emails.findIndex(email => email.domId === datasetDomId);
+      if (domIndex !== -1) {
+        replyingToMessageIndex = domIndex;
+        console.log('[MailBot] 🎯 Reply index matched via DOM id:', replyingToMessageIndex,
+          'from:', emails[replyingToMessageIndex].fromName);
+      }
+    }
+  }
+
+  if (replyingToMessageIndex === null && editableField && emails.length > 0) {
+    // First attempt: check if the compose field lives inside a specific message element
+    const directMatchIndex = emails.findIndex(email => email.element?.contains(editableField));
+    if (directMatchIndex !== -1) {
+      replyingToMessageIndex = directMatchIndex;
+      console.log('[MailBot] 🎯 Reply compose detected within message at index:', replyingToMessageIndex,
+        'from:', emails[replyingToMessageIndex].fromName);
+    }
+  }
+
+  if (replyingToMessageIndex === null && editableField && emails.length > 0) {
+    const nearbyMessageEl = editableField.closest('.adn, .adp, .nH[role="region"], .gs');
+    if (nearbyMessageEl) {
+      const nearbyIndex = emails.findIndex(email => email.element === nearbyMessageEl);
+      if (nearbyIndex !== -1) {
+        replyingToMessageIndex = nearbyIndex;
+        console.log('[MailBot] 🎯 Reply compose linked to closest message at index:', replyingToMessageIndex,
+          'from:', emails[replyingToMessageIndex].fromName);
+      }
+    }
+  }
+
+  if (replyingToMessageIndex === null && editableField && emails.length > 0) {
+    // Strategy: Find the message element that appears immediately before the compose field in the DOM
+
+    // Get the compose container (walk up the DOM tree)
+    let composeContainer = editableField;
+    while (composeContainer && !composeContainer.classList.contains('M9')) {
+      composeContainer = composeContainer.parentElement;
+      if (composeContainer === document.body) {
+        composeContainer = null;
+        break;
+      }
+    }
+
+    if (composeContainer) {
+      // Walk backwards through siblings to find the nearest message
+      let sibling = composeContainer.previousElementSibling;
+      while (sibling) {
+        // Check if this sibling is or contains a message element
+        const messageEl = sibling.classList.contains('adn') ? sibling : sibling.querySelector('.adn.ads');
+
+        if (messageEl) {
+          // Find this message in our emails array
+          replyingToMessageIndex = emails.findIndex(email => email.element === messageEl);
+          if (replyingToMessageIndex !== -1) {
+            console.log('[MailBot] 🎯 Detected replying to message at index via sibling traversal:', replyingToMessageIndex,
+                       'from:', emails[replyingToMessageIndex].fromName);
+            break;
+          }
+        }
+        sibling = sibling.previousElementSibling;
+      }
+    }
+
+    // Fallback: If we couldn't find a specific message, assume we're replying at the end
+    if (replyingToMessageIndex === null) {
+      console.log('[MailBot] 📍 Could not detect specific reply position, assuming end of thread');
+    }
+  }
+
+  // Analyze conversation state with context about which message we're replying to
+  const conversationState = analyzeConversationState(emails, currentUserEmail, replyingToMessageIndex);
+
   // Build full thread text with context markers
   const fullThread = emails.map((email, idx) => {
     const role = email.isFromUser ? '[YOU]' : '[THEM]';
     return `${role} From: ${email.from}\nTo: ${email.to}\n${email.content}`;
   }).join('\n\n---\n\n');
-  
+
   console.log('[MailBot] Thread context extracted:', {
     subject,
     currentUserEmail,
     messageCount: emails.length,
-    conversationState
+    conversationState,
+    allEmails: emails.map((e, i) => ({
+      index: i,
+      from: e.fromName,
+      to: e.toName,
+      isFromUser: e.isFromUser
+    }))
   });
   
   return {
@@ -928,9 +1405,9 @@ function showIntentModal(editableField, boxType) {
     intentInput.disabled = true;
     toneSelect.disabled = true;
     loadingDiv.style.display = 'block';
-    
-    // Extract email context
-    const threadContext = extractThreadContext();
+
+    // Extract email context (pass editableField to detect reply position)
+    const threadContext = extractThreadContext(editableField);
     
     // Send message to background for AI generation
     try {
@@ -1023,6 +1500,21 @@ function attachMailBotButton(editableField, type = 'dialog') {
   // Assign unique ID to the field
   if (!editableField._mailbotId) {
     editableField._mailbotId = `mailbot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  // Capture message metadata so we know which part of the thread this compose relates to
+  const messageMetadata = findMessageMetadataForEditable(editableField);
+  if (messageMetadata.threadIndex !== null && messageMetadata.threadIndex >= 0) {
+    editableField.dataset.mailbotMessageIndex = String(messageMetadata.threadIndex);
+  }
+  if (messageMetadata.legacyMessageId) {
+    editableField.dataset.mailbotLegacyMessageId = messageMetadata.legacyMessageId;
+  }
+  if (messageMetadata.messageId) {
+    editableField.dataset.mailbotMessageId = messageMetadata.messageId;
+  }
+  if (messageMetadata.messageElement?.id) {
+    editableField.dataset.mailbotMessageDomId = messageMetadata.messageElement.id;
   }
   
   // Create container that will hold both collapsed and expanded states
@@ -1410,8 +1902,8 @@ function attachMailBotButton(editableField, type = 'dialog') {
       generateBtn.style.opacity = '0.6';
       
       try {
-        // Get thread context with enhanced metadata
-        const threadContext = extractThreadContext();
+        // Get thread context with enhanced metadata (pass editableField to detect reply position)
+        const threadContext = extractThreadContext(editableField);
         
         // Get default tone from storage
         const { defaultTone } = await chrome.storage.local.get(['defaultTone']);
@@ -1760,9 +2252,9 @@ function attachMailBotButton(editableField, type = 'dialog') {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       e.preventDefault();
-      
-      // Extract thread context
-      const threadContext = extractThreadContext();
+
+      // Extract thread context (pass editableField to detect reply position)
+      const threadContext = extractThreadContext(editableField);
       
       // Send message to background with context
       chrome.runtime.sendMessage({ 
