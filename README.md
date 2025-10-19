@@ -25,13 +25,17 @@ MailBot is a Chrome extension that uses Gemini Nano (Chrome's built-in on-device
    - Go to `chrome://extensions`
    - Toggle **"Developer mode"** on (top right corner)
 
-3. **Enable All Gemini Nano Flags**:
+3. **Enable Optimization Guide Flag**:
    - Go to `chrome://flags`
+   - Search for "optimization guide" or "Enables optimization guide on device"
+   - Set **"Enables optimization guide on device"** to `Enabled BypassPerfRequirement`
+
+4. **Enable All Gemini Nano Flags**:
+   - Still in `chrome://flags`
    - Search for "gemini" or "nano" and enable ALL the following flags:
    
    | Flag | Setting |
    |------|--------|
-   | **Enables optimization guide on device** | `Enabled BypassPerfRequirement` |
    | **Prompt API for Gemini Nano** | `Enabled` |
    | **Prompt API for Gemini Nano with Multimodal Input** | `Enabled` |
    | **Summarization API for Gemini Nano** | `Enabled Multilingual` |
@@ -41,14 +45,14 @@ MailBot is a Chrome extension that uses Gemini Nano (Chrome's built-in on-device
    
    - Click **"Relaunch"** to restart Chrome
 
-4. **Download the AI Model**:
+5. **Download the AI Model**:
    - Go to `chrome://components`
    - Find **"Optimization Guide On Device Model"**
    - Click **"Check for update"**
    - Wait for the model to download (may take 5-10 minutes)
    - The version should show something like: `2025.8.8.1141`
 
-5. **Verify Model is Ready**:
+6. **Verify Model is Ready**:
    - Go to `chrome://on-device-internals/`
    - Click **"Model Status"** tab
    - Scroll down and wait until these show **"Ready"** status:
@@ -109,7 +113,7 @@ MailBot is a Chrome extension that uses Gemini Nano (Chrome's built-in on-device
 **Check the following:**
 
 1. Is Chrome fully updated to the latest stable version?
-2. Are ALL 7 Gemini Nano flags enabled? (see Prerequisites above)
+2. Are the Optimization Guide flag and ALL Gemini Nano flags enabled? (see Prerequisites above)
 3. Did you restart Chrome after enabling flags?
 4. Is the model downloaded and ready?
    - Go to `chrome://components`
