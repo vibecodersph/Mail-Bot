@@ -1489,6 +1489,718 @@ function insertReplyText(editableField, text) {
 }
 
 /**
+ * Create and inject dual-mode MailBot pill (Compose | Summarize)
+ * @param {HTMLElement} editableField - The contenteditable text field element
+ * @param {HTMLElement} container - The mailbot container element
+ * @param {string} type - Type of compose box
+ */
+function injectDualModePill(editableField, container, type) {
+  const dualPill = document.createElement('div');
+  dualPill.className = 'mailbot-dual-pill';
+  
+  // Create Compose button
+  const composeBtn = document.createElement('button');
+  composeBtn.className = 'mailbot-mode-btn mailbot-compose-btn';
+  composeBtn.textContent = 'Compose';
+  composeBtn.setAttribute('data-mode', 'compose');
+  
+  // Create Summarize button
+  const summarizeBtn = document.createElement('button');
+  summarizeBtn.className = 'mailbot-mode-btn mailbot-summarize-btn';
+  summarizeBtn.textContent = 'Summarize';
+  summarizeBtn.setAttribute('data-mode', 'summarize');
+  
+  dualPill.appendChild(composeBtn);
+  dualPill.appendChild(summarizeBtn);
+  
+  // Style the dual pill container
+  dualPill.style.display = 'inline-flex';
+  dualPill.style.background = '#000000';
+  dualPill.style.border = '1.5px solid #000000';
+  dualPill.style.borderRadius = '16px';
+  dualPill.style.padding = '8px 12px';  // Increased padding for larger draggable area
+  dualPill.style.gap = '12px';  // Increased gap between buttons for easier dragging
+  dualPill.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+  dualPill.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+  dualPill.style.cursor = 'grab';  // Show grab cursor on the container
+  
+  // Style individual mode buttons
+  [composeBtn, summarizeBtn].forEach(btn => {
+    btn.style.padding = '8px 16px';
+    btn.style.background = 'transparent';
+    btn.style.color = 'rgba(255, 255, 255, 0.6)';
+    btn.style.border = 'none';
+    btn.style.borderRadius = '12px';
+    btn.style.cursor = 'pointer';  // Pointer cursor on buttons
+    btn.style.fontSize = '14px';
+    btn.style.fontWeight = '500';
+    btn.style.transition = 'all 0.2s ease';
+    btn.style.whiteSpace = 'nowrap';
+    btn.style.pointerEvents = 'auto'; // Ensure buttons are clickable
+  });
+  
+  // Compose is active by default
+  composeBtn.style.background = '#ffffff';
+  composeBtn.style.color = '#000000';
+  
+  // Event listeners for mode switching (will be checked in drag logic)
+  composeBtn.addEventListener('click', (e) => {
+    openComposeMode(editableField, container, composeBtn, summarizeBtn);
+    e.stopPropagation(); // Prevent event from bubbling to pill
+  });
+  summarizeBtn.addEventListener('click', (e) => {
+    openSummarizeMode(editableField, container, composeBtn, summarizeBtn);
+    e.stopPropagation(); // Prevent event from bubbling to pill
+  });
+  
+  return dualPill;
+}
+
+/**
+ * Open Compose mode (existing behavior)
+ */
+function openComposeMode(editableField, container, composeBtn, summarizeBtn) {
+  console.log('[MailBot] Opening Compose mode');
+  
+  // Update button states
+  composeBtn.style.background = '#ffffff';
+  composeBtn.style.color = '#000000';
+  summarizeBtn.style.background = 'transparent';
+  summarizeBtn.style.color = 'rgba(255, 255, 255, 0.6)';
+  
+  // Hide summarize panel if visible
+  const summarizePanel = container.querySelector('.mailbot-summarize-panel');
+  if (summarizePanel) {
+    summarizePanel.style.display = 'none';
+  }
+  
+  // Show compose expanded panel
+  const expandedPanel = container.querySelector('.mailbot-expanded');
+  if (expandedPanel) {
+    expandedPanel.style.display = 'flex';
+    expandedPanel.style.opacity = '1';
+    const input = expandedPanel.querySelector('.mailbot-input');
+    if (input) input.focus();
+  }
+  
+  container.setAttribute('data-state', 'compose');
+}
+
+/**
+ * Open Summarize mode
+ */
+function openSummarizeMode(editableField, container, composeBtn, summarizeBtn) {
+  console.log('[MailBot] Opening Summarize mode');
+  
+  // Update button states
+  summarizeBtn.style.background = '#ffffff';
+  summarizeBtn.style.color = '#000000';
+  composeBtn.style.background = 'transparent';
+  composeBtn.style.color = 'rgba(255, 255, 255, 0.6)';
+  
+  // Hide compose panel
+  const expandedPanel = container.querySelector('.mailbot-expanded');
+  if (expandedPanel) {
+    expandedPanel.style.display = 'none';
+  }
+  
+  // Show or create summarize panel
+  let summarizePanel = container.querySelector('.mailbot-summarize-panel');
+  if (!summarizePanel) {
+    summarizePanel = createSummarizePanel(editableField);
+    container.appendChild(summarizePanel);
+  }
+  
+  summarizePanel.style.display = 'flex';
+  summarizePanel.style.opacity = '1';
+  
+  container.setAttribute('data-state', 'summarize');
+}
+
+/**
+ * Create the Summarize panel UI shell
+ */
+function createSummarizePanel(editableField) {
+  const panel = document.createElement('div');
+  panel.className = 'mailbot-summarize-panel';
+  
+  panel.innerHTML = `
+    <div class="mb-summary-header">
+      <span class="mb-summary-title">Thread Summary</span>
+      <button class="mb-summary-close" title="Close">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M10 2L4 8L10 14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="mb-summary-controls">
+      <div class="mb-summary-level">
+        <button class="mb-level-btn mb-level-active" data-level="concise">Concise</button>
+        <button class="mb-level-btn" data-level="detailed">Detailed</button>
+      </div>
+      
+      <div class="mb-summary-toggle">
+        <button class="mb-toggle-btn mb-toggle-active" data-view="summary">Summary</button>
+        <button class="mb-toggle-btn" data-view="actions">Action Items</button>
+      </div>
+    </div>
+    
+    <div class="mb-summary-body" contenteditable="false" aria-readonly="true" tabindex="-1">Click Generate to summarize thread</div>
+    
+    <div class="mb-summary-actions">
+      <button class="mb-summary-generate">Generate</button>
+      <button class="mb-summary-copy" disabled>Copy</button>
+      <button class="mb-summary-insert" disabled>Insert</button>
+    </div>
+    
+    <div class="mb-summary-meta">
+      <span>Generated · <span class="mb-message-count">—</span> messages · Last updated: <span class="mb-last-updated">—</span></span>
+    </div>
+  `;
+  
+  // Style the panel
+  styleSummarizePanel(panel);
+  
+  // Add event listeners
+  attachSummarizePanelListeners(panel, editableField);
+  
+  return panel;
+}
+
+/**
+ * Style the Summarize panel
+ */
+function styleSummarizePanel(panel) {
+  panel.style.display = 'none';
+  panel.style.flexDirection = 'column';
+  panel.style.background = '#000000';
+  panel.style.border = '1.5px solid #000000';
+  panel.style.borderRadius = '16px';
+  panel.style.padding = '16px 20px';
+  panel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+  panel.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+  panel.style.minWidth = '500px';
+  panel.style.maxWidth = '700px';
+  panel.style.gap = '12px';
+  panel.style.opacity = '1';
+  
+  // Header
+  const header = panel.querySelector('.mb-summary-header');
+  header.style.display = 'flex';
+  header.style.justifyContent = 'space-between';
+  header.style.alignItems = 'center';
+  header.style.marginBottom = '8px';
+  
+  const title = panel.querySelector('.mb-summary-title');
+  title.style.fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
+  title.style.fontSize = '15px';
+  title.style.fontWeight = '600';
+  title.style.color = 'rgba(255, 255, 255, 0.9)';
+  title.style.marginBottom = '6px';
+  title.style.lineHeight = 'normal';
+  
+  const closeBtn = panel.querySelector('.mb-summary-close');
+  closeBtn.style.padding = '8px';
+  closeBtn.style.background = '#ffffff';
+  closeBtn.style.color = '#000000';
+  closeBtn.style.border = 'none';
+  closeBtn.style.borderRadius = '50%';
+  closeBtn.style.width = '32px';
+  closeBtn.style.height = '32px';
+  closeBtn.style.display = 'flex';
+  closeBtn.style.alignItems = 'center';
+  closeBtn.style.justifyContent = 'center';
+  closeBtn.style.cursor = 'pointer';
+  closeBtn.style.transition = 'all 0.2s ease';
+  
+  // Add hover effects to close button
+  closeBtn.addEventListener('mouseenter', () => {
+    closeBtn.style.background = '#e8e8e8';
+    closeBtn.style.transform = 'scale(1.05)';
+  });
+  
+  closeBtn.addEventListener('mouseleave', () => {
+    closeBtn.style.background = '#ffffff';
+    closeBtn.style.transform = 'scale(1)';
+  });
+  
+  // Controls container
+  const controls = panel.querySelector('.mb-summary-controls');
+  controls.style.display = 'flex';
+  controls.style.justifyContent = 'space-between';
+  controls.style.alignItems = 'center';
+  controls.style.gap = '12px';
+  controls.style.flexWrap = 'wrap';
+  
+  // Level selector
+  const levelDiv = panel.querySelector('.mb-summary-level');
+  levelDiv.style.display = 'flex';
+  levelDiv.style.gap = '4px';
+  levelDiv.style.background = '#1a1a1a';
+  levelDiv.style.padding = '4px';
+  levelDiv.style.borderRadius = '12px';
+  
+  panel.querySelectorAll('.mb-level-btn').forEach(btn => {
+    btn.style.padding = '6px 12px';
+    btn.style.background = 'transparent';
+    btn.style.color = 'rgba(255, 255, 255, 0.6)';
+    btn.style.border = 'none';
+    btn.style.borderRadius = '8px';
+    btn.style.cursor = 'pointer';
+    btn.style.fontSize = '13px';
+    btn.style.fontWeight = '500';
+    btn.style.transition = 'all 0.2s ease';
+  });
+  
+  const activeLevel = panel.querySelector('.mb-level-active');
+  if (activeLevel) {
+    activeLevel.style.background = '#ffffff';
+    activeLevel.style.color = '#000000';
+  }
+  
+  // Toggle (Summary/Action Items)
+  const toggleDiv = panel.querySelector('.mb-summary-toggle');
+  toggleDiv.style.display = 'flex';
+  toggleDiv.style.gap = '4px';
+  toggleDiv.style.background = '#1a1a1a';
+  toggleDiv.style.padding = '4px';
+  toggleDiv.style.borderRadius = '12px';
+  
+  panel.querySelectorAll('.mb-toggle-btn').forEach(btn => {
+    btn.style.padding = '6px 16px';
+    btn.style.background = 'transparent';
+    btn.style.color = 'rgba(255, 255, 255, 0.6)';
+    btn.style.border = 'none';
+    btn.style.borderRadius = '8px';
+    btn.style.cursor = 'pointer';
+    btn.style.fontSize = '13px';
+    btn.style.fontWeight = '500';
+    btn.style.transition = 'all 0.2s ease';
+  });
+  
+  const activeToggle = panel.querySelector('.mb-toggle-active');
+  if (activeToggle) {
+    activeToggle.style.background = '#ffffff';
+    activeToggle.style.color = '#000000';
+  }
+  
+  // Body (editable content area)
+  const body = panel.querySelector('.mb-summary-body');
+  body.style.padding = '12px';
+  body.style.background = '#1a1a1a';
+  body.style.border = '1.5px solid #333333';
+  body.style.borderRadius = '12px';
+  body.style.color = '#ffffff';
+  body.style.fontSize = '14px';
+  body.style.lineHeight = '1.6';
+  body.style.minHeight = '150px';
+  body.style.maxHeight = '400px';
+  body.style.overflowY = 'auto';
+  body.style.outline = 'none';
+  body.style.whiteSpace = 'pre-wrap';
+  body.style.wordWrap = 'break-word';
+  body.style.textAlign = 'left';
+  body.style.verticalAlign = 'top';
+  body.style.display = 'flex';
+  body.style.alignItems = 'flex-start';
+  body.style.justifyContent = 'flex-start';
+  
+  // Action buttons
+  const actions = panel.querySelector('.mb-summary-actions');
+  actions.style.display = 'flex';
+  actions.style.gap = '8px';
+  actions.style.justifyContent = 'flex-end';
+  
+  panel.querySelectorAll('.mb-summary-actions button').forEach(btn => {
+    btn.style.padding = '10px 20px';
+    btn.style.background = '#ffffff';
+    btn.style.color = '#000000';
+    btn.style.border = '1.5px solid #ffffff';
+    btn.style.borderRadius = '20px';
+    btn.style.fontSize = '14px';
+    btn.style.fontWeight = '500';
+    btn.style.cursor = 'pointer';
+    btn.style.transition = 'all 0.2s ease';
+    btn.style.whiteSpace = 'nowrap';
+    btn.style.letterSpacing = '0.3px';
+    btn.style.pointerEvents = 'auto';  // Ensure buttons respond to clicks even when disabled
+    
+    // Add hover effects matching Compose panel buttons (always active, even when disabled)
+    btn.addEventListener('mouseenter', () => {
+      btn.style.background = '#e8e8e8';
+      btn.style.transform = 'scale(1.02)';
+    });
+    
+    btn.addEventListener('mouseleave', () => {
+      btn.style.background = '#ffffff';
+      btn.style.transform = 'scale(1)';
+    });
+  });
+  
+  // Metadata line
+  const meta = panel.querySelector('.mb-summary-meta');
+  meta.style.fontSize = '12px';
+  meta.style.color = 'rgba(255, 255, 255, 0.5)';
+  meta.style.textAlign = 'center';
+}
+
+/**
+ * Attach event listeners to Summarize panel
+ */
+function attachSummarizePanelListeners(panel, editableField) {
+  // Close button
+  const closeBtn = panel.querySelector('.mb-summary-close');
+  closeBtn.addEventListener('click', () => {
+    panel.style.display = 'none';
+    const container = panel.closest('.mailbot-container');
+    if (container) {
+      container.setAttribute('data-state', 'collapsed');
+    }
+  });
+  
+  // Level selector buttons
+  panel.querySelectorAll('.mb-level-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      panel.querySelectorAll('.mb-level-btn').forEach(b => {
+        b.style.background = 'transparent';
+        b.style.color = 'rgba(255, 255, 255, 0.6)';
+        b.classList.remove('mb-level-active');
+      });
+      btn.style.background = '#ffffff';
+      btn.style.color = '#000000';
+      btn.classList.add('mb-level-active');
+      
+      // If content has been generated, switch to the appropriate version
+      if (summaryGenerated) {
+        const body = panel.querySelector('.mb-summary-body');
+        const newLevel = btn.dataset.level;
+        const currentView = panel.querySelector('.mb-toggle-active')?.dataset.view || 'summary';
+        
+        // Switch content based on BOTH current view AND new level
+        if (currentView === 'summary') {
+          if (newLevel === 'concise' && generatedContent.conciseSummary) {
+            body.textContent = generatedContent.conciseSummary;
+          } else if (newLevel === 'detailed' && generatedContent.detailedSummary) {
+            body.textContent = generatedContent.detailedSummary;
+          }
+        } else if (currentView === 'actions') {
+          if (newLevel === 'concise' && generatedContent.conciseActionItems) {
+            body.textContent = generatedContent.conciseActionItems;
+          } else if (newLevel === 'detailed' && generatedContent.detailedActionItems) {
+            body.textContent = generatedContent.detailedActionItems;
+          }
+        }
+      }
+      
+      console.log('[MailBot] Summary level changed to:', btn.dataset.level);
+    });
+  });
+  
+  // Toggle buttons (Summary/Action Items)
+  panel.querySelectorAll('.mb-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      panel.querySelectorAll('.mb-toggle-btn').forEach(b => {
+        b.style.background = 'transparent';
+        b.style.color = 'rgba(255, 255, 255, 0.6)';
+        b.classList.remove('mb-toggle-active');
+      });
+      btn.style.background = '#ffffff';
+      btn.style.color = '#000000';
+      btn.classList.add('mb-toggle-active');
+      
+      const body = panel.querySelector('.mb-summary-body');
+      
+      // If content has been generated, switch to the appropriate view
+      if (summaryGenerated) {
+        const newView = btn.dataset.view;
+        const activeLevel = panel.querySelector('.mb-level-active')?.dataset.level || 'concise';
+        
+        // Switch content based on BOTH new view AND current level
+        if (newView === 'actions') {
+          if (activeLevel === 'concise' && generatedContent.conciseActionItems) {
+            body.textContent = generatedContent.conciseActionItems;
+          } else if (activeLevel === 'detailed' && generatedContent.detailedActionItems) {
+            body.textContent = generatedContent.detailedActionItems;
+          }
+        } else if (newView === 'summary') {
+          if (activeLevel === 'concise' && generatedContent.conciseSummary) {
+            body.textContent = generatedContent.conciseSummary;
+          } else if (activeLevel === 'detailed' && generatedContent.detailedSummary) {
+            body.textContent = generatedContent.detailedSummary;
+          }
+        }
+      } else {
+        // No content generated yet, show placeholder
+        if (btn.dataset.view === 'actions') {
+          body.textContent = 'Action items will appear here after generation';
+        } else {
+          body.textContent = 'Click Generate to summarize thread';
+        }
+      }
+      
+      console.log('[MailBot] View switched to:', btn.dataset.view);
+    });
+  });
+  
+  // Generate button with AI summarization
+  const generateBtn = panel.querySelector('.mb-summary-generate');
+  let summaryGenerated = false;  // Track if summary has been generated
+  let generatedContent = {
+    conciseSummary: null,
+    detailedSummary: null,
+    conciseActionItems: null,
+    detailedActionItems: null
+  };  // Store all generated content
+  
+  generateBtn.addEventListener('click', async () => {
+    console.log('[MailBot] Generate Summary clicked');
+    const body = panel.querySelector('.mb-summary-body');
+    const activeView = panel.querySelector('.mb-toggle-active')?.dataset.view || 'summary';
+    const activeLevel = panel.querySelector('.mb-level-active')?.dataset.level || 'concise';
+    
+    // Show loading state
+    generateBtn.textContent = 'Generating...';
+    generateBtn.disabled = true;
+    generateBtn.style.opacity = '0.6';
+    body.textContent = 'Analyzing email thread and extracting insights...';
+    body.style.color = '#ffffff';
+    
+    try {
+      // Extract thread context
+      const threadContext = extractThreadContext(editableField);
+      
+      if (!threadContext.emails || threadContext.emails.length === 0) {
+        throw new Error('No email messages found in thread');
+      }
+      
+      console.log('[MailBot] Thread extracted:', {
+        messageCount: threadContext.messageCount,
+        subject: threadContext.subject
+      });
+      
+      // Check if AI is available (same approach as Compose panel)
+      if (!('LanguageModel' in self)) {
+        throw new Error('Gemini Nano API is not available. Please ensure:\n\n1. Chrome Canary/Dev 127+\n2. Flags are enabled\n3. Model is downloaded from chrome://components');
+      }
+      
+      console.log('[MailBot] Creating AI session for summarization...');
+      
+      // Create AI session (same as Compose panel)
+      const session = await LanguageModel.create({
+        systemPrompt: 'You are an AI assistant that summarizes email threads clearly and concisely.'
+      });
+      
+      console.log('[MailBot] AI session created successfully');
+      
+      // Build conversation history
+      const conversationHistory = threadContext.emails.map((email, idx) => {
+        const role = email.isFromUser ? '[YOU]' : `[${email.fromName || 'Other'}]`;
+        const timestamp = email.timestamp ? new Date(email.timestamp).toLocaleString() : '';
+        return `Message ${idx + 1} ${timestamp ? `(${timestamp})` : ''}:\n${role}\nFrom: ${email.fromName || email.from}\nTo: ${email.toName || email.to}\n\n${email.content}`;
+      }).join('\n\n═══════════════════════════════════════\n\n');
+      
+      // Generate all three versions in sequence
+      console.log('[MailBot] Generating concise summary...');
+      body.textContent = 'Generating concise summary...';
+      const concisePrompt = `You are summarizing an email thread for quick understanding.
+
+SUBJECT: ${threadContext.subject}
+MESSAGE COUNT: ${threadContext.messageCount}
+
+EMAIL THREAD:
+${conversationHistory}
+
+INSTRUCTIONS:
+Write a brief, concise summary in 2-3 sentences. Focus only on the most important points.
+
+- Use clear, professional language
+- Focus on the main topic and key points
+- Identify any decisions, agreements, or action items mentioned
+- Keep it informative but easy to scan
+- Do NOT include greetings or closings
+- Do NOT address anyone directly
+- Write in third person or neutral perspective
+
+YOUR SUMMARY:`;
+      
+      generatedContent.conciseSummary = (await session.prompt(concisePrompt)).trim();
+      console.log('[MailBot] ✓ Concise summary generated');
+      
+      // Generate detailed summary
+      console.log('[MailBot] Generating detailed summary...');
+      body.textContent = 'Generating detailed summary...';
+      const detailedPrompt = `You are summarizing an email thread for quick understanding.
+
+SUBJECT: ${threadContext.subject}
+MESSAGE COUNT: ${threadContext.messageCount}
+
+EMAIL THREAD:
+${conversationHistory}
+
+INSTRUCTIONS:
+Write a detailed summary covering all major points discussed. Include context, key decisions, and important details. Use 4-6 sentences.
+
+- Use clear, professional language
+- Focus on the main topic and key points
+- Identify any decisions, agreements, or action items mentioned
+- Keep it informative but easy to scan
+- Do NOT include greetings or closings
+- Do NOT address anyone directly
+- Write in third person or neutral perspective
+
+YOUR SUMMARY:`;
+      
+      generatedContent.detailedSummary = (await session.prompt(detailedPrompt)).trim();
+      console.log('[MailBot] ✓ Detailed summary generated');
+      
+      // Generate concise action items
+      console.log('[MailBot] Extracting concise action items...');
+      body.textContent = 'Extracting concise action items...';
+      const conciseActionItemsPrompt = `You are extracting action items from an email thread.
+
+SUBJECT: ${threadContext.subject}
+MESSAGE COUNT: ${threadContext.messageCount}
+
+EMAIL THREAD:
+${conversationHistory}
+
+INSTRUCTIONS:
+List only the most critical action items. Be brief.
+
+- Extract clear, actionable tasks mentioned in the thread
+- Include who is responsible if mentioned
+- Include deadlines if mentioned
+- Format as a bulleted list using "•" or "-"
+- If no action items are found, respond with: "No specific action items identified in this thread."
+- Keep each item very concise
+- Focus only on the most important next steps
+
+ACTION ITEMS:`;
+      
+      generatedContent.conciseActionItems = (await session.prompt(conciseActionItemsPrompt)).trim();
+      console.log('[MailBot] ✓ Concise action items extracted');
+      
+      // Generate detailed action items
+      console.log('[MailBot] Extracting detailed action items...');
+      body.textContent = 'Extracting detailed action items...';
+      const detailedActionItemsPrompt = `You are extracting action items from an email thread.
+
+SUBJECT: ${threadContext.subject}
+MESSAGE COUNT: ${threadContext.messageCount}
+
+EMAIL THREAD:
+${conversationHistory}
+
+INSTRUCTIONS:
+List all action items with relevant context and details.
+
+- Extract clear, actionable tasks mentioned in the thread
+- Include who is responsible if mentioned
+- Include deadlines if mentioned
+- Format as a bulleted list using "•" or "-"
+- If no action items are found, respond with: "No specific action items identified in this thread."
+- Keep each item concise and actionable
+- Include relevant context for each action item
+- Focus on concrete next steps, not vague statements
+
+ACTION ITEMS:`;
+      
+      generatedContent.detailedActionItems = (await session.prompt(detailedActionItemsPrompt)).trim();
+      console.log('[MailBot] ✓ Detailed action items extracted');
+      
+      // Clean up session
+      session.destroy();
+      
+      console.log('[MailBot] ✓ All content generated successfully');
+      
+      // Display the appropriate content based on current view AND level
+      if (activeView === 'summary') {
+        body.textContent = activeLevel === 'concise' ? generatedContent.conciseSummary : generatedContent.detailedSummary;
+      } else {
+        body.textContent = activeLevel === 'concise' ? generatedContent.conciseActionItems : generatedContent.detailedActionItems;
+      }
+      body.style.color = '#ffffff';
+      
+      // Update metadata
+      panel.querySelector('.mb-message-count').textContent = threadContext.messageCount;
+      panel.querySelector('.mb-last-updated').textContent = new Date().toLocaleTimeString();
+      
+      // Mark as generated and enable editing
+      summaryGenerated = true;
+      body.contentEditable = 'true';
+      body.setAttribute('aria-readonly', 'false');
+      body.setAttribute('tabindex', '0');
+      body.focus();
+      
+      // Enable Copy and Insert buttons
+      copyBtn.disabled = false;
+      insertBtn.disabled = false;
+      
+    } catch (error) {
+      console.error('[MailBot] ✗ Summary generation failed:', error);
+      body.textContent = `Failed to generate summary: ${error.message}`;
+      body.style.color = '#ff4444';
+    } finally {
+      // Reset button
+      generateBtn.textContent = 'Generate';
+      generateBtn.disabled = false;
+      generateBtn.style.opacity = '1';
+    }
+  });
+  
+  // Copy button
+  const copyBtn = panel.querySelector('.mb-summary-copy');
+  copyBtn.addEventListener('click', () => {
+    if (!summaryGenerated) {
+      // Show visual feedback
+      const body = panel.querySelector('.mb-summary-body');
+      const originalText = body.textContent;
+      body.textContent = 'Please click "Generate" first...';
+      body.style.color = '#ff4444';
+      setTimeout(() => {
+        body.textContent = originalText;
+        body.style.color = '#ffffff';
+      }, 2000);
+      return;
+    }
+    
+    const body = panel.querySelector('.mb-summary-body');
+    navigator.clipboard.writeText(body.textContent).then(() => {
+      console.log('[MailBot] Summary copied to clipboard');
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => {
+        copyBtn.textContent = 'Copy';
+      }, 2000);
+    });
+  });
+  
+  // Insert button
+  const insertBtn = panel.querySelector('.mb-summary-insert');
+  insertBtn.addEventListener('click', () => {
+    if (!summaryGenerated) {
+      // Show visual feedback
+      const body = panel.querySelector('.mb-summary-body');
+      const originalText = body.textContent;
+      body.textContent = 'Please click "Generate" first...';
+      body.style.color = '#ff4444';
+      setTimeout(() => {
+        body.textContent = originalText;
+        body.style.color = '#ffffff';
+      }, 2000);
+      return;
+    }
+    
+    const body = panel.querySelector('.mb-summary-body');
+    if (editableField) {
+      editableField.textContent = body.textContent;
+      editableField.dispatchEvent(new Event('input', { bubbles: true }));
+      console.log('[MailBot] Summary inserted into compose field');
+    }
+  });
+}
+
+/**
  * Attach MailBot button to a compose/reply container
  * @param {HTMLElement} editableField - The contenteditable text field element
  * @param {string} type - Type of compose box: 'dialog', 'inline', or 'compose'
@@ -1524,12 +2236,11 @@ function attachMailBotButton(editableField, type = 'dialog') {
   container.setAttribute('data-field-id', editableField._mailbotId);
   container.setAttribute('data-state', 'collapsed'); // Track UI state
   
-  // Create collapsed button (original MailBot button)
-  const collapsedBtn = document.createElement('button');
-  collapsedBtn.textContent = 'MailBot';
-  collapsedBtn.className = 'mailbot-btn mailbot-collapsed';
-  collapsedBtn.setAttribute('data-mailbot-type', type);
-  collapsedBtn.setAttribute('data-field-id', editableField._mailbotId);
+  // Create dual-mode pill (Compose | Summarize)
+  const dualPill = injectDualModePill(editableField, container, type);
+  
+  // Legacy reference for backward compatibility
+  const collapsedBtn = dualPill; // Use dual pill as the "collapsed" button
   
   // Create expanded panel
   const expandedPanel = document.createElement('div');
@@ -1568,8 +2279,8 @@ function attachMailBotButton(editableField, type = 'dialog') {
   container.appendChild(expandedPanel);
   container.appendChild(previewContainer); // Add preview container BELOW expanded panel
   
-  // Reference for easier access
-  const btn = collapsedBtn;
+  // Reference for easier access (dual pill acts as the collapsed button)
+  const btn = dualPill;
   
   // Different styling based on type
   if (type === 'inline') {
@@ -1579,24 +2290,9 @@ function attachMailBotButton(editableField, type = 'dialog') {
     container.style.pointerEvents = 'auto';
     container.style.userSelect = 'none';
     
-    // COLLAPSED BUTTON STYLING - Compact rounded rectangular shape
-    btn.style.display = 'inline-flex';
-    btn.style.alignItems = 'center';
-    btn.style.justifyContent = 'center';
-    btn.style.padding = '10px 20px';  // Slightly less padding for compact look
-    btn.style.background = '#000000';
-    btn.style.color = 'rgba(255, 255, 255, 0.8)';  // Slightly dimmed white text (80% opacity)
-    btn.style.border = '1.5px solid #000000';
-    btn.style.borderRadius = '16px';  // More rectangular, less rounded than full pill
+    // Dual pill styling already applied in injectDualModePill(), just add positioning properties
     btn.style.cursor = 'grab';
-    btn.style.fontSize = '16px';
-    btn.style.fontWeight = '500';
-    btn.style.letterSpacing = '0.3px';
     btn.style.transition = 'all 0.2s ease';
-    btn.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-    btn.style.whiteSpace = 'nowrap';
-    btn.style.height = '60px';  // Compact height
-    btn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';  // Subtle shadow for depth
     btn.style.opacity = '1';  // Initial opacity for fade transitions
     
     // EXPANDED PANEL STYLING - Black theme to match MailBot button
@@ -1617,13 +2313,16 @@ function attachMailBotButton(editableField, type = 'dialog') {
     
     // Style label - White text on black (also draggable)
     const label = expandedPanel.querySelector('.mailbot-label');
-    label.style.color = '#ffffff';  // White text
-    label.style.fontSize = '13px';
-    label.style.fontWeight = '400';
+    label.style.fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
+    label.style.fontSize = '14px';
+    label.style.fontWeight = '600';
+    label.style.color = 'rgba(255, 255, 255, 0.9)';
+    label.style.marginBottom = '6px';
     label.style.whiteSpace = 'nowrap';
     label.style.marginRight = '8px';
     label.style.cursor = 'grab';  // Label is draggable
-    label.style.opacity = '0.8';  // Slightly dimmed
+    label.style.padding = '0';  // Reset default label padding
+    label.style.lineHeight = 'normal';  // Reset line height
     
     // Style input - Dark with white text
     const input = expandedPanel.querySelector('.mailbot-input');
@@ -1766,13 +2465,22 @@ function attachMailBotButton(editableField, type = 'dialog') {
     
     // STATE TOGGLE FUNCTIONS
     function expandPanel() {
-      container.setAttribute('data-state', 'expanded');
+      // Default to Compose mode when expanding
+      const composeBtn = container.querySelector('.mailbot-compose-btn');
+      const summarizeBtn = container.querySelector('.mailbot-summarize-btn');
       
-      // Fade out collapsed button
+      if (composeBtn && summarizeBtn) {
+        openComposeMode(editableField, container, composeBtn, summarizeBtn);
+      } else {
+        // Fallback for legacy behavior
+        container.setAttribute('data-state', 'expanded');
+      }
+      
+      // Fade out dual pill
       btn.style.transition = 'opacity 0.2s ease';
       btn.style.opacity = '0';
       
-      // After fade out, hide button and show expanded panel
+      // After fade out, hide pill and show expanded panel
       setTimeout(() => {
         btn.style.display = 'none';
         expandedPanel.style.display = 'flex';
@@ -2050,23 +2758,36 @@ function attachMailBotButton(editableField, type = 'dialog') {
     }
     
     // Drag functionality (works in both collapsed and expanded states)
+    let isDraggingGlobal = false;
+    let dragStartPos = null;  // Track initial click position
+    
     function onMouseDown(e) {
       // Allow drag in both states, but from specific elements
       const isCollapsed = container.getAttribute('data-state') === 'collapsed';
       
       if (isCollapsed) {
-        // In collapsed state, only drag from the button itself
-        if (e.target !== btn) return;
+        // In collapsed state, allow drag from anywhere on dual pill
+        // We'll detect if it's a drag or click based on movement distance
       } else {
-        // In expanded state, allow drag from the panel background or label (not from inputs/buttons)
+        // In expanded state, allow drag from the panel background, label, or dual pill (not from inputs/buttons inside panel)
         const clickedElement = e.target;
         const isDraggableArea = 
           clickedElement === expandedPanel ||
           clickedElement.classList.contains('mailbot-label') ||
+          clickedElement.classList.contains('mailbot-dual-pill') ||
+          clickedElement.classList.contains('mailbot-mode-btn') ||
+          clickedElement.classList.contains('mailbot-compose-btn') ||
+          clickedElement.classList.contains('mailbot-summarize-btn') ||
           clickedElement === container;
         
         if (!isDraggableArea) return;
       }
+      
+      // Store initial click position to detect movement
+      dragStartPos = {
+        x: e.clientX,
+        y: e.clientY
+      };
       
       isDragging = true;
       
@@ -2077,6 +2798,8 @@ function attachMailBotButton(editableField, type = 'dialog') {
       } else {
         expandedPanel.style.cursor = 'grabbing';
         expandedPanel.style.transition = 'none';
+        btn.style.cursor = 'grabbing';
+        btn.style.transition = 'none';
       }
       
       const rect = container.getBoundingClientRect();
@@ -2089,6 +2812,19 @@ function attachMailBotButton(editableField, type = 'dialog') {
     
     function onMouseMove(e) {
       if (!isDragging) return;
+      
+      // Check if we've moved enough to consider this a real drag
+      if (dragStartPos && !isDraggingGlobal) {
+        const moveDistance = Math.sqrt(
+          Math.pow(e.clientX - dragStartPos.x, 2) +
+          Math.pow(e.clientY - dragStartPos.y, 2)
+        );
+        
+        // If moved more than 5px, set the global drag flag
+        if (moveDistance > 5) {
+          isDraggingGlobal = true;
+        }
+      }
       
       customPosition = {
         x: e.clientX - dragOffset.x,
@@ -2114,6 +2850,15 @@ function attachMailBotButton(editableField, type = 'dialog') {
       
       isDragging = false;
       
+      // Calculate movement distance from initial click
+      let moveDistance = 0;
+      if (dragStartPos) {
+        moveDistance = Math.sqrt(
+          Math.pow(e.clientX - dragStartPos.x, 2) +
+          Math.pow(e.clientY - dragStartPos.y, 2)
+        );
+      }
+      
       // Reset cursor based on state
       if (isCollapsed) {
         btn.style.cursor = 'grab';
@@ -2123,22 +2868,28 @@ function attachMailBotButton(editableField, type = 'dialog') {
         expandedPanel.style.transition = 'all 0.2s ease';
       }
       
-      // If barely moved and collapsed, treat as a click to expand
-      if (isCollapsed && customPosition && dragOffset) {
-        const moveDistance = Math.sqrt(
-          Math.pow(e.clientX - (customPosition.x + dragOffset.x), 2) +
-          Math.pow(e.clientY - (customPosition.y + dragOffset.y), 2)
-        );
+      // If this was a click (< 5px movement), handle appropriately
+      if (moveDistance < 5 && isCollapsed) {
+        const target = e.target;
+        const isModeBtnClick = target.classList.contains('mailbot-mode-btn') ||
+                              target.classList.contains('mailbot-compose-btn') ||
+                              target.classList.contains('mailbot-summarize-btn');
         
-        if (moveDistance < 5) {
-          // This was a click, not a drag - expand the panel
-          // DO NOT reset customPosition - preserve user's chosen location!
+        if (!isModeBtnClick) {
+          // Clicked on pill background (not a button), expand panel
           expandPanel();
         }
-      } else if (isCollapsed && !customPosition) {
-        // No drag started, treat as click
-        expandPanel();
+        // If clicked on a button, the button's click handler will fire naturally
+      } else if (moveDistance >= 5) {
+        // This was a drag - prevent button clicks by stopping propagation
+        e.stopImmediatePropagation();
       }
+      
+      // Reset drag state
+      setTimeout(() => {
+        isDraggingGlobal = false;
+        dragStartPos = null;
+      }, 10);
       
       e.preventDefault();
       e.stopPropagation();
