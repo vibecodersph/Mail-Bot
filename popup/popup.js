@@ -3,6 +3,8 @@
 
 const DEFAULT_SETTINGS = {
   fullName: '',
+  title: '',
+  contactNumber: '',
   defaultTone: 'neutral',
   emailLength: 'average',
   preferredGreetings: 'Hi, Hello, Good day',
@@ -37,6 +39,8 @@ function showStatus(message, isError = false) {
 // Save settings
 document.getElementById('save-btn').addEventListener('click', async () => {
   const fullName = document.getElementById('full-name').value.trim();
+  const title = document.getElementById('title').value.trim();
+  const contactNumber = document.getElementById('contact-number').value.trim();
   const defaultTone = document.getElementById('tone-select').value;
   const emailLength = document.getElementById('email-length').value;
   const preferredGreetings = document.getElementById('preferred-greetings').value.trim();
@@ -66,6 +70,8 @@ document.getElementById('save-btn').addEventListener('click', async () => {
   // Save to storage
   await chrome.storage.local.set({
     fullName,
+    title,
+    contactNumber,
     defaultTone,
     emailLength,
     preferredGreetings: greetings.join(', '),
@@ -73,13 +79,15 @@ document.getElementById('save-btn').addEventListener('click', async () => {
   });
   
   showStatus('✓ Settings saved!');
-  console.log('[MailBot] Settings saved:', { fullName, defaultTone, emailLength, greetings, closings });
+  console.log('[MailBot] Settings saved:', { fullName, title, contactNumber, defaultTone, emailLength, greetings, closings });
 });
 
 // Load settings
 async function loadSettings() {
   const settings = await chrome.storage.local.get([
     'fullName',
+    'title',
+    'contactNumber',
     'defaultTone',
     'emailLength',
     'preferredGreetings',
@@ -87,6 +95,8 @@ async function loadSettings() {
   ]);
   
   document.getElementById('full-name').value = settings.fullName || DEFAULT_SETTINGS.fullName;
+  document.getElementById('title').value = settings.title || DEFAULT_SETTINGS.title;
+  document.getElementById('contact-number').value = settings.contactNumber || DEFAULT_SETTINGS.contactNumber;
   document.getElementById('tone-select').value = settings.defaultTone || DEFAULT_SETTINGS.defaultTone;
   document.getElementById('email-length').value = settings.emailLength || DEFAULT_SETTINGS.emailLength;
   document.getElementById('preferred-greetings').value = settings.preferredGreetings || DEFAULT_SETTINGS.preferredGreetings;
@@ -94,6 +104,13 @@ async function loadSettings() {
   
   console.log('[MailBot] Settings loaded:', settings);
 }
+
+// Validate contact number input (only allow numbers and formatting characters)
+document.getElementById('contact-number')?.addEventListener('input', (e) => {
+  const input = e.target;
+  // Allow numbers, +, -, spaces, and parentheses
+  input.value = input.value.replace(/[^0-9+\-\s()]/g, '');
+});
 
 // Load settings on popup open
 window.addEventListener('DOMContentLoaded', loadSettings);

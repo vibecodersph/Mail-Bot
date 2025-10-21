@@ -60,7 +60,10 @@ label:first-of-type {
   font-weight: 600;
 }
 
+/* Shared input styling for consistent dark theme */
+.mailbot-input,
 input[type="text"],
+input[type="tel"],
 select {
   width: 100%;
   padding: 12px 16px;
@@ -75,21 +78,27 @@ select {
   margin-bottom: 6px;
 }
 
+.mailbot-input:hover,
 input[type="text"]:hover,
+input[type="tel"]:hover,
 select:hover {
   background: #333333;
   border-color: #444444;
 }
 
+.mailbot-input:focus,
 input[type="text"]:focus,
+input[type="tel"]:focus,
 select:focus {
   outline: none;
   background: #333333;
   border-color: #666666;
 }
 
-input[type="text"]::placeholder {
-  color: #888888;
+.mailbot-input::placeholder,
+input[type="text"]::placeholder,
+input[type="tel"]::placeholder {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 select {

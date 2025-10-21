@@ -1460,7 +1460,7 @@ function showIntentModal(editableField, boxType) {
 /**
  * Insert generated reply text into Gmail compose field
  * @param {HTMLElement} editableField - The contenteditable compose field
- * @param {string} text - The generated text to insert
+ * @param {string} text - The generated text to insert (already includes signature)
  */
 function insertReplyText(editableField, text) {
   if (!editableField) return;
@@ -1468,7 +1468,7 @@ function insertReplyText(editableField, text) {
   // Clear existing content
   editableField.innerHTML = '';
   
-  // Insert new text
+  // Insert new text (signature is already included from generation)
   const lines = text.split('\n');
   lines.forEach((line, index) => {
     const textNode = document.createTextNode(line);
@@ -2751,8 +2751,71 @@ function attachMailBotButton(editableField, type = 'dialog') {
         
         console.log('[MailBot] ✓ Reply generated successfully (attempt ' + result.attemptNumber + ')');
         
+        // Add signature to generated text
+        const settings = await chrome.storage.local.get(['fullName', 'title', 'contactNumber']);
+        console.log('[MailBot] Signature settings:', settings);
+        
+        const signatureParts = [];
+        if (settings.fullName && settings.fullName.trim()) {
+          signatureParts.push(settings.fullName.trim());
+        }
+        if (settings.title && settings.title.trim()) {
+          signatureParts.push(settings.title.trim());
+        }
+        if (settings.contactNumber && settings.contactNumber.trim()) {
+          signatureParts.push(settings.contactNumber.trim());
+        }
+        
+        console.log('[MailBot] Signature parts:', signatureParts);
+        
+        let finalText = result.text;
+        
+        // Add signature if configured
+        if (signatureParts.length > 0 && settings.fullName) {
+          const signature = signatureParts.join('\n');
+          
+          // Check if AI already added a closing with the user's name in the last few lines
+          const lines = result.text.trim().split('\n');
+          const nameParts = settings.fullName.toLowerCase().split(/\s+/);
+          
+          // Look in the last 3 lines only (closing area)
+          let nameLineIndex = -1;
+          for (let i = lines.length - 1; i >= Math.max(0, lines.length - 3); i--) {
+            const lineLower = lines[i].toLowerCase().trim();
+            // Check if this line is JUST the name (not part of email body)
+            const hasName = nameParts.some(part => part.length > 2 && lineLower.includes(part));
+            // Also check it's likely a signature line (short, standalone)
+            const isSignatureLine = lineLower.length < 50 && !lineLower.includes('@');
+            
+            if (hasName && isSignatureLine) {
+              nameLineIndex = i;
+              break;
+            }
+          }
+          
+          if (nameLineIndex >= 0) {
+            // AI added name in closing - replace ONLY that line with full signature
+            const beforeClosing = lines.slice(0, nameLineIndex);
+            const afterClosing = lines.slice(nameLineIndex + 1);
+            
+            // Rebuild: body + signature (skip AI's name line)
+            if (afterClosing.length > 0) {
+              finalText = `${beforeClosing.join('\n')}\n\n${signature}\n${afterClosing.join('\n')}`;
+            } else {
+              finalText = `${beforeClosing.join('\n')}\n\n${signature}`;
+            }
+            console.log('[MailBot] ✓ Replaced AI name line with full signature (title + contact)');
+          } else {
+            // No name in closing - just append signature
+            finalText = `${result.text}\n\n${signature}`;
+            console.log('[MailBot] ✓ Signature appended to generated email');
+          }
+        } else {
+          console.log('[MailBot] ℹ No signature configured');
+        }
+        
         // Store generated text
-        generatedText = result.text;
+        generatedText = finalText;
         
         // Show preview in separate box below with fade-in animation
         previewContent.textContent = generatedText;

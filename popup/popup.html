@@ -14,8 +14,16 @@
       <h3>Personal Information</h3>
       
       <label for="full-name">Full Name <span class="required">*</span></label>
-      <input type="text" id="full-name" placeholder="e.g., Peter Benjamin Parker" />
+      <input type="text" id="full-name" class="mailbot-input" placeholder="e.g., Peter Benjamin Parker" />
       <small>Used for email signatures (separate names with spaces)</small>
+      
+      <label for="title">Title</label>
+      <input type="text" id="title" class="mailbot-input" placeholder="e.g., Senior Software Engineer" />
+      <small>Your job title or position (optional)</small>
+      
+      <label for="contact-number">Contact Number</label>
+      <input type="tel" id="contact-number" class="mailbot-input" placeholder="e.g., +1 (555) 123-4567" pattern="[0-9+\-\s()]*" />
+      <small>Your contact phone number (optional)</small>
     </div>
     
     <!-- Email Preferences Section -->
@@ -43,11 +51,11 @@
       <h3>Common Phrases</h3>
       
       <label for="preferred-greetings">Greetings (up to 3)</label>
-      <input type="text" id="preferred-greetings" placeholder="Hi, Hello, Good day" />
+      <input type="text" id="preferred-greetings" class="mailbot-input" placeholder="Hi, Hello, Good day" />
       <small>Separate with commas</small>
       
       <label for="preferred-closings">Closings (up to 3)</label>
-      <input type="text" id="preferred-closings" placeholder="Sincerely, Best regards" />
+      <input type="text" id="preferred-closings" class="mailbot-input" placeholder="Sincerely, Best regards" />
       <small>Separate with commas</small>
     </div>
     
