@@ -1200,8 +1200,14 @@ Write a ${toneInstructions[tone] || 'professional'} email that:
 9. ✓ Does NOT include "Subject:" or "Re:" lines (Gmail handles that)
 10. ✓ Ends with one of: ${closings.join(', ')}
 11. ✓ Signs as "${userDisplayName}" NOT "${recipientName}"
-${conversationState.isFollowUp ? '12. ✓ Clearly indicates this is a follow-up' : ''}
-${conversationState.respondingTo ? '12. ✓ Directly responds to their message' : ''}
+12. ✓ FORMAT CLOSING PROPERLY: Put closing on its own line, then name on next line
+    Example:
+    Regards,
+    ${userDisplayName}
+    
+    NOT: Regards, ${userDisplayName}
+${conversationState.isFollowUp ? '13. ✓ Clearly indicates this is a follow-up' : ''}
+${conversationState.respondingTo ? '13. ✓ Directly responds to their message' : ''}
 
 CRITICAL REMINDERS:
 ❌ DO NOT write "Dear ${userDisplayName}" or "Hi ${userDisplayName}" - that's you!
@@ -2774,37 +2780,62 @@ function attachMailBotButton(editableField, type = 'dialog') {
         if (signatureParts.length > 0 && settings.fullName) {
           const signature = signatureParts.join('\n');
           
-          // Check if AI already added a closing with the user's name in the last few lines
+          // Check if AI already added the user's name in closing
           const lines = result.text.trim().split('\n');
           const nameParts = settings.fullName.toLowerCase().split(/\s+/);
+          const fullNameLower = settings.fullName.toLowerCase();
           
-          // Look in the last 3 lines only (closing area)
-          let nameLineIndex = -1;
-          for (let i = lines.length - 1; i >= Math.max(0, lines.length - 3); i--) {
+          // Find ALL lines with the user's name in the last 5 lines (closing area)
+          const nameLinesInfo = [];
+          
+          for (let i = lines.length - 1; i >= Math.max(0, lines.length - 5); i--) {
             const lineLower = lines[i].toLowerCase().trim();
-            // Check if this line is JUST the name (not part of email body)
             const hasName = nameParts.some(part => part.length > 2 && lineLower.includes(part));
-            // Also check it's likely a signature line (short, standalone)
-            const isSignatureLine = lineLower.length < 50 && !lineLower.includes('@');
             
-            if (hasName && isSignatureLine) {
-              nameLineIndex = i;
-              break;
+            if (hasName) {
+              const closingWords = ['regards', 'sincerely', 'best', 'thanks', 'thank you'];
+              const hasClosingWord = closingWords.some(word => lineLower.includes(word));
+              
+              if (hasClosingWord && lineLower.includes(fullNameLower)) {
+                // Name is inline with closing
+                nameLinesInfo.push({ index: i, isInline: true });
+                console.log('[MailBot] 🔍 Detected inline name with closing word at line', i);
+              } else if (lineLower === fullNameLower || lineLower.length < 50) {
+                // Name is on its own line (standalone signature)
+                nameLinesInfo.push({ index: i, isInline: false });
+                console.log('[MailBot] 🔍 Detected standalone name line at line', i);
+              } else {
+                // Name appears in email body, not signature - skip
+                console.log('[MailBot] ℹ Name found in body at line', i, ', not in signature area');
+              }
             }
           }
           
-          if (nameLineIndex >= 0) {
-            // AI added name in closing - replace ONLY that line with full signature
-            const beforeClosing = lines.slice(0, nameLineIndex);
-            const afterClosing = lines.slice(nameLineIndex + 1);
+          if (nameLinesInfo.length > 0) {
+            console.log('[MailBot] Found', nameLinesInfo.length, 'name instance(s) in closing');
             
-            // Rebuild: body + signature (skip AI's name line)
-            if (afterClosing.length > 0) {
-              finalText = `${beforeClosing.join('\n')}\n\n${signature}\n${afterClosing.join('\n')}`;
-            } else {
-              finalText = `${beforeClosing.join('\n')}\n\n${signature}`;
+            // Process all name lines (remove them from the email)
+            // Sort by index descending to remove from bottom up (avoids index shifting issues)
+            nameLinesInfo.sort((a, b) => b.index - a.index);
+            
+            for (const info of nameLinesInfo) {
+              if (info.isInline) {
+                // Remove name from the closing line
+                const line = lines[info.index];
+                const escapedName = settings.fullName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const namePattern = new RegExp(`[,]?\\s*${escapedName}\\s*$`, 'i');
+                lines[info.index] = line.replace(namePattern, '').trim();
+                console.log('[MailBot] Cleaned inline name from line', info.index);
+              } else {
+                // Remove the entire line with just the name
+                lines.splice(info.index, 1);
+                console.log('[MailBot] Removed standalone name line at index', info.index);
+              }
             }
-            console.log('[MailBot] ✓ Replaced AI name line with full signature (title + contact)');
+            
+            // Append signature once at the end
+            finalText = `${lines.join('\n')}\n\n${signature}`;
+            console.log('[MailBot] ✓ Removed all AI name instances and added full signature once');
           } else {
             // No name in closing - just append signature
             finalText = `${result.text}\n\n${signature}`;
