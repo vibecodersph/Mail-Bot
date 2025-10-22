@@ -3284,6 +3284,205 @@ function attachMailBotButton(editableField, type = 'dialog') {
 }
 
 /**
+ * Position MailBot panel beside Gmail compose window with intelligent left/right placement
+ * - Attaches panel inside compose container as absolute positioned element
+ * - Prefers left placement, flips to right if insufficient space
+ * - Computes top position below compose header (To/Subject fields)
+ * - Handles window resize and compose DOM changes
+ * - Returns cleanup function to remove observers when compose closes
+ * 
+ * @param {HTMLElement} composeEl - Gmail compose container (typically div[role="dialog"])
+ * @param {HTMLElement} panelEl - MailBot panel element to position
+ * @param {Object} options - Configuration options
+ * @param {number} options.padding - Space between panel and compose edge (default: 8)
+ * @param {number} options.maxWidth - Maximum panel width in pixels (default: 420)
+ * @returns {Function} Cleanup function to remove observers and listeners
+ */
+function positionPanelBesideCompose(composeEl, panelEl, options = {}) {
+  const { padding = 8, maxWidth = 420 } = options;
+  
+  if (!composeEl || !panelEl) {
+    console.warn('[MailBot Compose] Missing compose or panel element for positioning');
+    return () => {};
+  }
+  
+  // Prevent duplicate attachment
+  if (composeEl.dataset.mailbotInjected === 'true') {
+    return () => {};
+  }
+  composeEl.dataset.mailbotInjected = 'true';
+  
+  // Ensure compose container can contain absolute positioned children
+  const computedPosition = getComputedStyle(composeEl).position;
+  if (computedPosition === 'static') {
+    composeEl.style.position = 'relative';
+  }
+  
+  // Append panel to compose container
+  if (panelEl.parentElement !== composeEl) {
+    composeEl.appendChild(panelEl);
+  }
+  
+  let isPositioning = false; // Prevent recursive calls
+  let resizeTimeout;
+  let observerTimeout;
+  
+  /**
+   * Compute and apply panel position
+   * - Determines left vs right placement based on available space
+   * - Calculates top position based on compose header elements
+   * - Sets panel width responsively
+   */
+  function computePosition() {
+    if (isPositioning) return;
+    isPositioning = true;
+    
+    try {
+      const composeRect = composeEl.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      
+      // Calculate available space on left and right
+      const leftSpace = composeRect.left;
+      const rightSpace = viewportWidth - composeRect.right;
+      
+      // Determine panel width: responsive based on viewport
+      // For narrow screens, use a smaller fixed width inside compose
+      const calculatedWidth = Math.round(composeRect.width * 0.45);
+      const width = Math.min(maxWidth, Math.max(300, calculatedWidth));
+      
+      // Check if we have enough space beside the compose window
+      const hasSpaceBeside = (leftSpace >= width + padding * 2) || (rightSpace >= width + padding * 2);
+      
+      let placement = 'inside'; // Default to inside compose
+      
+      if (hasSpaceBeside) {
+        // We have space beside - prefer left, else right
+        if (leftSpace >= width + padding * 2) {
+          placement = 'left';
+        } else if (rightSpace >= width + padding * 2) {
+          placement = 'right';
+        }
+      }
+      
+      // Find compose header elements to calculate top position
+      // Look for To/Subject/CC fields - use the bottommost element
+      const headerSelectors = 'input, textarea, [role="textbox"], .aoT, .vO, [name="to"], [name="subjectbox"]';
+      const headerElements = Array.from(composeEl.querySelectorAll(headerSelectors));
+      
+      let headerBottom = 0;
+      if (headerElements.length > 0) {
+        headerElements.forEach(el => {
+          const rect = el.getBoundingClientRect();
+          // Skip invisible elements
+          if (rect.width > 0 && rect.height > 0) {
+            const relativeBottom = rect.bottom - composeRect.top;
+            headerBottom = Math.max(headerBottom, relativeBottom);
+          }
+        });
+      }
+      
+      // Fallback to default if no header elements found or value seems wrong
+      // Gmail compose headers are typically within first 200px
+      let topPosition;
+      if (headerBottom > 20 && headerBottom < 300) {
+        topPosition = headerBottom + padding;
+      } else {
+        // Use a more conservative default - look for subject field specifically
+        const subjectField = composeEl.querySelector('input[name="subjectbox"]');
+        if (subjectField) {
+          const subjectRect = subjectField.getBoundingClientRect();
+          topPosition = (subjectRect.bottom - composeRect.top) + padding;
+        } else {
+          topPosition = 120; // Safe fallback
+        }
+      }
+      
+      // Apply positioning
+      panelEl.style.position = 'absolute';
+      panelEl.style.top = `${topPosition}px`;
+      
+      // Remove previous placement classes
+      panelEl.classList.remove('mailbot-left', 'mailbot-right', 'mailbot-inside');
+      
+      if (placement === 'left') {
+        // Position to the left OUTSIDE compose
+        panelEl.classList.add('mailbot-left');
+        panelEl.style.width = `${width}px`;
+        panelEl.style.left = `${-width - padding}px`;
+        panelEl.style.right = 'auto';
+        panelEl.style.transform = 'none';
+      } else if (placement === 'right') {
+        // Position to the right OUTSIDE compose
+        panelEl.classList.add('mailbot-right');
+        panelEl.style.width = `${width}px`;
+        panelEl.style.right = `${-width - padding}px`;
+        panelEl.style.left = 'auto';
+        panelEl.style.transform = 'none';
+      } else {
+        // Position INSIDE compose - centered horizontally
+        panelEl.classList.add('mailbot-inside');
+        panelEl.style.width = '90%';
+        panelEl.style.maxWidth = '500px';
+        panelEl.style.left = '50%';
+        panelEl.style.right = 'auto';
+        panelEl.style.transform = 'translateX(-50%)';
+      }
+      
+      // Show panel after positioning
+      panelEl.style.opacity = '1';
+      panelEl.style.visibility = 'visible';
+      
+    } catch (err) {
+      console.warn('[MailBot Compose] Positioning failed:', err);
+      // Fallback positioning
+      panelEl.style.position = 'absolute';
+      panelEl.style.top = '64px';
+      panelEl.style.left = '-360px';
+      panelEl.style.width = '340px';
+      panelEl.classList.add('mailbot-left');
+      panelEl.style.opacity = '1';
+      panelEl.style.visibility = 'visible';
+    } finally {
+      isPositioning = false;
+    }
+  }
+  
+  // Hide panel initially
+  panelEl.style.opacity = '0';
+  panelEl.style.visibility = 'hidden';
+  
+  // Initial positioning with delay for DOM to settle
+  setTimeout(() => computePosition(), 100);
+  
+  // Reposition on window resize (throttled)
+  const handleResize = () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => computePosition(), 150);
+  };
+  window.addEventListener('resize', handleResize);
+  
+  // Watch for DOM changes in compose (throttled)
+  const observer = new MutationObserver(() => {
+    clearTimeout(observerTimeout);
+    observerTimeout = setTimeout(() => computePosition(), 200);
+  });
+  observer.observe(composeEl, { childList: true, subtree: true });
+  
+  // Return cleanup function
+  return () => {
+    clearTimeout(resizeTimeout);
+    clearTimeout(observerTimeout);
+    window.removeEventListener('resize', handleResize);
+    observer.disconnect();
+    delete composeEl.dataset.mailbotInjected;
+    if (panelEl.parentElement) {
+      panelEl.remove();
+    }
+    console.log('[MailBot Compose] ✓ Positioning cleanup completed');
+  };
+}
+
+/**
  * PHASE A: Compose-from-scratch UI (UI-only, simulated generation)
  * Detects if this is a new compose and shows subject+body generation interface
  */
@@ -3293,7 +3492,6 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
     const isNewCompose = messageMetadata.threadIndex === null && !messageMetadata.messageId;
     
     if (!isNewCompose) {
-      console.log('[MailBot Compose] Not a new compose, skipping compose UI');
       return;
     }
     
@@ -3303,23 +3501,23 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
     }
     container.dataset.composeUIAttached = 'true';
     
-    console.log('[MailBot Compose] Detected new compose, attaching compose-from-scratch UI');
+    console.log('[MailBot Compose] Detected new compose, attaching UI');
     
-    // Find the subject field (it's in the same dialog as the body)
+    // Find the compose window container
     const dialog = editableField.closest('div[role="dialog"]');
-    let subjectField = null;
-    if (dialog) {
-      // Gmail subject field is usually: input[name="subjectbox"] or aria-label contains "Subject"
-      subjectField = dialog.querySelector('input[name="subjectbox"]') || 
-                     dialog.querySelector('input[aria-label*="Subject"]');
-    }
-    
-    if (!subjectField) {
-      console.warn('[MailBot Compose] Could not find subject field, skipping compose UI');
+    if (!dialog) {
+      console.warn('[MailBot Compose] Could not find compose dialog');
       return;
     }
     
-    console.log('[MailBot Compose] Found subject field, enabling compose mode');
+    // Find subject field for validation
+    const subjectField = dialog.querySelector('input[name="subjectbox"]') || 
+                         dialog.querySelector('input[aria-label*="Subject"]');
+    
+    if (!subjectField) {
+      console.warn('[MailBot Compose] Could not find subject field');
+      return;
+    }
     
     // Hide the default reply UI (Compose | Summarize pill)
     const dualPill = container.querySelector('.mailbot-dual-pill');
@@ -3330,73 +3528,23 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
     if (expandedPanel) expandedPanel.style.display = 'none';
     if (previewContainer) previewContainer.style.display = 'none';
     
-    // Create compact compose panel
+    // Prevent duplicate panels
+    if (dialog.querySelector('.mailbot-compose-panel')) {
+      console.log('[MailBot Compose] Panel already exists in this compose');
+      return;
+    }
+    
+    // Create compact compose panel with semantic CSS classes
     const composePanel = document.createElement('div');
     composePanel.className = 'mailbot-compose-panel';
-    composePanel.style.cssText = `
-      position: fixed;
-      z-index: 9999999;
-      background: #000000;
-      border: 1.5px solid #000000;
-      border-radius: 16px;
-      padding: 10px 20px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      min-width: 500px;
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    `;
     
     composePanel.innerHTML = `
-      <label style="font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.9); white-space: nowrap;">What do you want to say?</label>
-      <input type="text" class="mailbot-compose-intent" placeholder="Your thoughts..." style="
-        flex: 1;
-        padding: 10px 16px;
-        background: #1a1a1a;
-        color: #ffffff;
-        border: 1.5px solid #333333;
-        border-radius: 20px;
-        font-size: 14px;
-        outline: none;
-        transition: all 0.2s ease;
-      "/>
-      <div class="mailbot-compose-controls" style="display: flex; gap: 8px;">
-        <button class="mailbot-compose-generate" style="
-          padding: 10px 20px;
-          background: #ffffff;
-          color: #000000;
-          border: 1.5px solid #ffffff;
-          border-radius: 20px;
-          font-size: 14px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        ">Generate</button>
-        <button class="mailbot-compose-insert" disabled style="
-          padding: 10px 20px;
-          background: #ffffff;
-          color: #000000;
-          border: 1.5px solid #ffffff;
-          border-radius: 20px;
-          font-size: 14px;
-          font-weight: 500;
-          cursor: not-allowed;
-          opacity: 0.5;
-          transition: all 0.2s ease;
-        ">Insert</button>
-        <button class="mailbot-compose-back" style="
-          padding: 10px;
-          background: transparent;
-          color: #ffffff;
-          border: none;
-          border-radius: 50%;
-          font-size: 16px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        ">
+      <label class="mb-label">What do you want to say?</label>
+      <input type="text" class="mb-intent-input" placeholder="Your thoughts..." />
+      <div class="mb-actions">
+        <button class="mb-action-btn mb-generate-btn">Generate</button>
+        <button class="mb-action-btn mb-insert-btn" disabled>Insert</button>
+        <button class="mb-back-btn">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <path d="M10 2L4 8L10 14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
@@ -3404,125 +3552,86 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
       </div>
     `;
     
-    // Create preview panel (appears below compact panel)
+    // Create preview panel using CSS classes
     const composePreview = document.createElement('div');
     composePreview.className = 'mailbot-compose-preview';
-    composePreview.style.cssText = `
-      position: fixed;
-      z-index: 9999998;
-      background: #000000;
-      border: 1.5px solid #333333;
-      border-radius: 12px;
-      padding: 16px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      display: none;
-      min-width: 500px;
-      max-width: 700px;
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    `;
+    composePreview.style.display = 'none'; // Hidden initially
     
     composePreview.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <span style="font-size: 13px; font-weight: 500; color: #ffffff; opacity: 0.8;">Preview (click to edit):</span>
-        <button class="mailbot-compose-regenerate" style="
-          padding: 4px 12px;
-          background: #333;
-          color: #fff;
-          border: 1px solid #555;
-          border-radius: 12px;
-          font-size: 12px;
-          cursor: pointer;
-        ">Regenerate</button>
+      <div class="mb-preview-header">
+        <span class="mb-preview-label">Preview (click to edit):</span>
+        <button class="mb-regenerate-btn">Regenerate</button>
       </div>
-      <div class="mailbot-compose-preview-content" style="
-        background: #1a1a1a;
-        border: 1px solid #333;
-        border-radius: 8px;
-        padding: 12px;
-        color: #ffffff;
-        font-size: 14px;
-        line-height: 1.6;
-        max-height: 300px;
-        overflow-y: auto;
-      ">
+      <div class="mb-preview-content">
         <div style="margin-bottom: 8px;">
           <strong style="color: rgba(255,255,255,0.6);">Subject:</strong>
-          <div class="mailbot-preview-subject" contenteditable="true" style="margin-top: 4px; outline: none;"></div>
+          <div class="mb-preview-subject" contenteditable="true"></div>
         </div>
         <div>
           <strong style="color: rgba(255,255,255,0.6);">Body:</strong>
-          <div class="mailbot-preview-body" contenteditable="true" style="margin-top: 4px; outline: none; white-space: pre-wrap;"></div>
+          <div class="mb-preview-body" contenteditable="true"></div>
         </div>
       </div>
     `;
     
-    // Append to container
-    container.appendChild(composePanel);
-    container.appendChild(composePreview);
+    // Position and attach both panels using the new positioning system
+    const cleanupPanelPosition = positionPanelBesideCompose(dialog, composePanel, {
+      padding: 8,
+      maxWidth: 420
+    });
     
-    // Position above the compose box (similar to reply UI)
-    positionComposePanel();
+    // Attach preview panel to compose dialog below the main panel
+    dialog.appendChild(composePreview);
     
-    function positionComposePanel() {
-      const rect = editableField.getBoundingClientRect();
-      composePanel.style.left = `${rect.left}px`;
-      composePanel.style.top = `${rect.top - composePanel.offsetHeight - 8}px`;
-      
+    // Position preview panel below compact panel
+    function positionPreview() {
       if (composePreview.style.display !== 'none') {
         const panelRect = composePanel.getBoundingClientRect();
-        composePreview.style.left = `${panelRect.left}px`;
-        composePreview.style.top = `${panelRect.bottom + 8}px`;
+        const dialogRect = dialog.getBoundingClientRect();
+        
+        // Calculate position relative to dialog
+        const relativeTop = panelRect.bottom - dialogRect.top + 8; // 8px gap
+        composePreview.style.position = 'absolute';
+        composePreview.style.top = `${relativeTop}px`;
+        
+        // Match panel positioning (left, right, or inside)
+        composePreview.classList.remove('mailbot-left', 'mailbot-right', 'mailbot-inside');
+        
+        if (composePanel.classList.contains('mailbot-left')) {
+          composePreview.classList.add('mailbot-left');
+          composePreview.style.left = composePanel.style.left;
+          composePreview.style.right = 'auto';
+          composePreview.style.width = composePanel.style.width;
+          composePreview.style.transform = 'none';
+        } else if (composePanel.classList.contains('mailbot-right')) {
+          composePreview.classList.add('mailbot-right');
+          composePreview.style.right = composePanel.style.right;
+          composePreview.style.left = 'auto';
+          composePreview.style.width = composePanel.style.width;
+          composePreview.style.transform = 'none';
+        } else {
+          // Inside placement
+          composePreview.classList.add('mailbot-inside');
+          composePreview.style.left = '50%';
+          composePreview.style.right = 'auto';
+          composePreview.style.width = '90%';
+          composePreview.style.maxWidth = '500px';
+          composePreview.style.transform = 'translateX(-50%)';
+        }
       }
     }
-    
-    // Re-position on window events
-    window.addEventListener('resize', positionComposePanel);
-    window.addEventListener('scroll', positionComposePanel, true);
     
     // State to hold generated draft
     let generatedDraft = null;
     
-    // Get UI elements
-    const intentInput = composePanel.querySelector('.mailbot-compose-intent');
-    const generateBtn = composePanel.querySelector('.mailbot-compose-generate');
-    const insertBtn = composePanel.querySelector('.mailbot-compose-insert');
-    const backBtn = composePanel.querySelector('.mailbot-compose-back');
-    const regenerateBtn = composePreview.querySelector('.mailbot-compose-regenerate');
-    const previewSubject = composePreview.querySelector('.mailbot-preview-subject');
-    const previewBody = composePreview.querySelector('.mailbot-preview-body');
-    
-    // Hover effects
-    generateBtn.addEventListener('mouseenter', () => {
-      generateBtn.style.background = '#e8e8e8';
-      generateBtn.style.transform = 'scale(1.02)';
-    });
-    generateBtn.addEventListener('mouseleave', () => {
-      generateBtn.style.background = '#ffffff';
-      generateBtn.style.transform = 'scale(1)';
-    });
-    
-    insertBtn.addEventListener('mouseenter', () => {
-      if (!insertBtn.disabled) {
-        insertBtn.style.background = '#e8e8e8';
-        insertBtn.style.transform = 'scale(1.02)';
-      }
-    });
-    insertBtn.addEventListener('mouseleave', () => {
-      if (!insertBtn.disabled) {
-        insertBtn.style.background = '#ffffff';
-        insertBtn.style.transform = 'scale(1)';
-      }
-    });
-    
-    // Input focus effects
-    intentInput.addEventListener('focus', () => {
-      intentInput.style.background = '#2a2a2a';
-      intentInput.style.borderColor = '#555555';
-    });
-    intentInput.addEventListener('blur', () => {
-      intentInput.style.background = '#1a1a1a';
-      intentInput.style.borderColor = '#333333';
-    });
+    // Get UI elements with updated selectors
+    const intentInput = composePanel.querySelector('.mb-intent-input');
+    const generateBtn = composePanel.querySelector('.mb-generate-btn');
+    const insertBtn = composePanel.querySelector('.mb-insert-btn');
+    const backBtn = composePanel.querySelector('.mb-back-btn');
+    const regenerateBtn = composePreview.querySelector('.mb-regenerate-btn');
+    const previewSubject = composePreview.querySelector('.mb-preview-subject');
+    const previewBody = composePreview.querySelector('.mb-preview-body');
     
     // Generate button click
     generateBtn.addEventListener('click', async () => {
@@ -3560,7 +3669,9 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
         previewSubject.textContent = generatedDraft.subject;
         previewBody.textContent = generatedDraft.body;
         composePreview.style.display = 'block';
-        positionComposePanel(); // Reposition to show preview
+        
+        // Position preview below compact panel
+        positionPreview();
         
         // Enable Insert button
         insertBtn.disabled = false;
@@ -3609,6 +3720,9 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
         
         previewSubject.textContent = generatedDraft.subject;
         previewBody.textContent = generatedDraft.body;
+        
+        // Reposition preview
+        positionPreview();
         
         regenerateBtn.textContent = 'Regenerate';
         regenerateBtn.disabled = false;
@@ -3677,8 +3791,14 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
       }
     });
     
-    // Back button click
+    // Back button click - cleanup and hide
     backBtn.addEventListener('click', () => {
+      // Clean up positioning observers
+      if (typeof cleanupPanelPosition === 'function') {
+        cleanupPanelPosition();
+      }
+      
+      // Hide panels
       composePanel.style.display = 'none';
       composePreview.style.display = 'none';
       

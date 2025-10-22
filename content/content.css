@@ -1,0 +1,215 @@
+/**
+ * MailBot Compose Panel Styles
+ * Dark minimalist theme with left/right positioning support
+ */
+
+.mailbot-compose-panel {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #0f0f0f;
+  color: #fff;
+  border: 1.5px solid #2a2a2a;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  z-index: 9999;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Arrow pseudo-element for left placement */
+.mailbot-compose-panel.mailbot-left::after {
+  content: '';
+  position: absolute;
+  right: -6px;
+  top: 24px;
+  width: 10px;
+  height: 10px;
+  background: #0f0f0f;
+  border-right: 1.5px solid #2a2a2a;
+  border-top: 1.5px solid #2a2a2a;
+  transform: rotate(45deg);
+  box-shadow: 2px -2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Arrow pseudo-element for right placement */
+.mailbot-compose-panel.mailbot-right::after {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 24px;
+  width: 10px;
+  height: 10px;
+  background: #0f0f0f;
+  border-left: 1.5px solid #2a2a2a;
+  border-bottom: 1.5px solid #2a2a2a;
+  transform: rotate(45deg);
+  box-shadow: -2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Inside placement - no arrow needed */
+.mailbot-compose-panel.mailbot-inside::after {
+  display: none;
+}
+
+/* Label styling */
+.mailbot-compose-panel .mb-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 8px;
+}
+
+/* Intent input field */
+.mailbot-compose-panel .mb-intent-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  background: #1a1a1a;
+  color: #ffffff;
+  border: 1.5px solid #333333;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+  margin-bottom: 10px;
+}
+
+.mailbot-compose-panel .mb-intent-input:focus {
+  background: #2a2a2a;
+  border-color: #555555;
+}
+
+.mailbot-compose-panel .mb-intent-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Action buttons container */
+.mailbot-compose-panel .mb-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Action button base styles */
+.mailbot-compose-panel .mb-action-btn {
+  padding: 8px 16px;
+  background: #ffffff;
+  color: #000000;
+  border: 1.5px solid #ffffff;
+  border-radius: 18px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.mailbot-compose-panel .mb-action-btn:hover:not(:disabled) {
+  background: #e8e8e8;
+  transform: scale(1.02);
+}
+
+.mailbot-compose-panel .mb-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Back button styling */
+.mailbot-compose-panel .mb-back-btn {
+  padding: 8px;
+  background: transparent;
+  color: #ffffff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.mailbot-compose-panel .mb-back-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Preview panel styles */
+.mailbot-compose-preview {
+  position: absolute;
+  box-sizing: border-box;
+  background: #0f0f0f;
+  border: 1.5px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  z-index: 9998;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #fff;
+}
+
+.mailbot-compose-preview .mb-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.mailbot-compose-preview .mb-preview-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.mailbot-compose-preview .mb-regenerate-btn {
+  padding: 4px 10px;
+  background: #2a2a2a;
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 10px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.mailbot-compose-preview .mb-regenerate-btn:hover {
+  background: #3a3a3a;
+}
+
+.mailbot-compose-preview .mb-preview-content {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 10px;
+  color: #ffffff;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.mailbot-compose-preview .mb-preview-subject,
+.mailbot-compose-preview .mb-preview-body {
+  margin-top: 4px;
+  outline: none;
+}
+
+.mailbot-compose-preview .mb-preview-body {
+  white-space: pre-wrap;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #2a2a2a;
+}
+
+/* Responsive width constraints */
+@media (max-width: 1200px) {
+  .mailbot-compose-panel {
+    max-width: 360px;
+  }
+}
+
+@media (max-width: 900px) {
+  .mailbot-compose-panel {
+    max-width: 300px;
+  }
+}
