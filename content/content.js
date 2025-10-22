@@ -3277,6 +3277,422 @@ function attachMailBotButton(editableField, type = 'dialog') {
       console.log(`[MailBot] UI attached to ${type} compose box`);
     }
   }
+  
+  // PHASE A: Detect if this is a new compose (no thread context)
+  // and attach compose-from-scratch UI instead
+  detectAndAttachComposeUI(editableField, container, messageMetadata);
+}
+
+/**
+ * PHASE A: Compose-from-scratch UI (UI-only, simulated generation)
+ * Detects if this is a new compose and shows subject+body generation interface
+ */
+function detectAndAttachComposeUI(editableField, container, messageMetadata) {
+  try {
+    // Check if this is a new compose (no thread context)
+    const isNewCompose = messageMetadata.threadIndex === null && !messageMetadata.messageId;
+    
+    if (!isNewCompose) {
+      console.log('[MailBot Compose] Not a new compose, skipping compose UI');
+      return;
+    }
+    
+    // Guard: Only attach once per container
+    if (container.dataset.composeUIAttached === 'true') {
+      return;
+    }
+    container.dataset.composeUIAttached = 'true';
+    
+    console.log('[MailBot Compose] Detected new compose, attaching compose-from-scratch UI');
+    
+    // Find the subject field (it's in the same dialog as the body)
+    const dialog = editableField.closest('div[role="dialog"]');
+    let subjectField = null;
+    if (dialog) {
+      // Gmail subject field is usually: input[name="subjectbox"] or aria-label contains "Subject"
+      subjectField = dialog.querySelector('input[name="subjectbox"]') || 
+                     dialog.querySelector('input[aria-label*="Subject"]');
+    }
+    
+    if (!subjectField) {
+      console.warn('[MailBot Compose] Could not find subject field, skipping compose UI');
+      return;
+    }
+    
+    console.log('[MailBot Compose] Found subject field, enabling compose mode');
+    
+    // Hide the default reply UI (Compose | Summarize pill)
+    const dualPill = container.querySelector('.mailbot-dual-pill');
+    const expandedPanel = container.querySelector('.mailbot-expanded');
+    const previewContainer = container.querySelector('.mailbot-preview-container');
+    
+    if (dualPill) dualPill.style.display = 'none';
+    if (expandedPanel) expandedPanel.style.display = 'none';
+    if (previewContainer) previewContainer.style.display = 'none';
+    
+    // Create compact compose panel
+    const composePanel = document.createElement('div');
+    composePanel.className = 'mailbot-compose-panel';
+    composePanel.style.cssText = `
+      position: fixed;
+      z-index: 9999999;
+      background: #000000;
+      border: 1.5px solid #000000;
+      border-radius: 16px;
+      padding: 10px 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 500px;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    `;
+    
+    composePanel.innerHTML = `
+      <label style="font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.9); white-space: nowrap;">What do you want to say?</label>
+      <input type="text" class="mailbot-compose-intent" placeholder="Your thoughts..." style="
+        flex: 1;
+        padding: 10px 16px;
+        background: #1a1a1a;
+        color: #ffffff;
+        border: 1.5px solid #333333;
+        border-radius: 20px;
+        font-size: 14px;
+        outline: none;
+        transition: all 0.2s ease;
+      "/>
+      <div class="mailbot-compose-controls" style="display: flex; gap: 8px;">
+        <button class="mailbot-compose-generate" style="
+          padding: 10px 20px;
+          background: #ffffff;
+          color: #000000;
+          border: 1.5px solid #ffffff;
+          border-radius: 20px;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        ">Generate</button>
+        <button class="mailbot-compose-insert" disabled style="
+          padding: 10px 20px;
+          background: #ffffff;
+          color: #000000;
+          border: 1.5px solid #ffffff;
+          border-radius: 20px;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: not-allowed;
+          opacity: 0.5;
+          transition: all 0.2s ease;
+        ">Insert</button>
+        <button class="mailbot-compose-back" style="
+          padding: 10px;
+          background: transparent;
+          color: #ffffff;
+          border: none;
+          border-radius: 50%;
+          font-size: 16px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        ">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M10 2L4 8L10 14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    `;
+    
+    // Create preview panel (appears below compact panel)
+    const composePreview = document.createElement('div');
+    composePreview.className = 'mailbot-compose-preview';
+    composePreview.style.cssText = `
+      position: fixed;
+      z-index: 9999998;
+      background: #000000;
+      border: 1.5px solid #333333;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      display: none;
+      min-width: 500px;
+      max-width: 700px;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    `;
+    
+    composePreview.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <span style="font-size: 13px; font-weight: 500; color: #ffffff; opacity: 0.8;">Preview (click to edit):</span>
+        <button class="mailbot-compose-regenerate" style="
+          padding: 4px 12px;
+          background: #333;
+          color: #fff;
+          border: 1px solid #555;
+          border-radius: 12px;
+          font-size: 12px;
+          cursor: pointer;
+        ">Regenerate</button>
+      </div>
+      <div class="mailbot-compose-preview-content" style="
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 12px;
+        color: #ffffff;
+        font-size: 14px;
+        line-height: 1.6;
+        max-height: 300px;
+        overflow-y: auto;
+      ">
+        <div style="margin-bottom: 8px;">
+          <strong style="color: rgba(255,255,255,0.6);">Subject:</strong>
+          <div class="mailbot-preview-subject" contenteditable="true" style="margin-top: 4px; outline: none;"></div>
+        </div>
+        <div>
+          <strong style="color: rgba(255,255,255,0.6);">Body:</strong>
+          <div class="mailbot-preview-body" contenteditable="true" style="margin-top: 4px; outline: none; white-space: pre-wrap;"></div>
+        </div>
+      </div>
+    `;
+    
+    // Append to container
+    container.appendChild(composePanel);
+    container.appendChild(composePreview);
+    
+    // Position above the compose box (similar to reply UI)
+    positionComposePanel();
+    
+    function positionComposePanel() {
+      const rect = editableField.getBoundingClientRect();
+      composePanel.style.left = `${rect.left}px`;
+      composePanel.style.top = `${rect.top - composePanel.offsetHeight - 8}px`;
+      
+      if (composePreview.style.display !== 'none') {
+        const panelRect = composePanel.getBoundingClientRect();
+        composePreview.style.left = `${panelRect.left}px`;
+        composePreview.style.top = `${panelRect.bottom + 8}px`;
+      }
+    }
+    
+    // Re-position on window events
+    window.addEventListener('resize', positionComposePanel);
+    window.addEventListener('scroll', positionComposePanel, true);
+    
+    // State to hold generated draft
+    let generatedDraft = null;
+    
+    // Get UI elements
+    const intentInput = composePanel.querySelector('.mailbot-compose-intent');
+    const generateBtn = composePanel.querySelector('.mailbot-compose-generate');
+    const insertBtn = composePanel.querySelector('.mailbot-compose-insert');
+    const backBtn = composePanel.querySelector('.mailbot-compose-back');
+    const regenerateBtn = composePreview.querySelector('.mailbot-compose-regenerate');
+    const previewSubject = composePreview.querySelector('.mailbot-preview-subject');
+    const previewBody = composePreview.querySelector('.mailbot-preview-body');
+    
+    // Hover effects
+    generateBtn.addEventListener('mouseenter', () => {
+      generateBtn.style.background = '#e8e8e8';
+      generateBtn.style.transform = 'scale(1.02)';
+    });
+    generateBtn.addEventListener('mouseleave', () => {
+      generateBtn.style.background = '#ffffff';
+      generateBtn.style.transform = 'scale(1)';
+    });
+    
+    insertBtn.addEventListener('mouseenter', () => {
+      if (!insertBtn.disabled) {
+        insertBtn.style.background = '#e8e8e8';
+        insertBtn.style.transform = 'scale(1.02)';
+      }
+    });
+    insertBtn.addEventListener('mouseleave', () => {
+      if (!insertBtn.disabled) {
+        insertBtn.style.background = '#ffffff';
+        insertBtn.style.transform = 'scale(1)';
+      }
+    });
+    
+    // Input focus effects
+    intentInput.addEventListener('focus', () => {
+      intentInput.style.background = '#2a2a2a';
+      intentInput.style.borderColor = '#555555';
+    });
+    intentInput.addEventListener('blur', () => {
+      intentInput.style.background = '#1a1a1a';
+      intentInput.style.borderColor = '#333333';
+    });
+    
+    // Generate button click
+    generateBtn.addEventListener('click', async () => {
+      try {
+        const intent = intentInput.value.trim();
+        
+        if (!intent) {
+          intentInput.style.borderColor = '#ff4444';
+          setTimeout(() => {
+            intentInput.style.borderColor = '#333333';
+          }, 2000);
+          return;
+        }
+        
+        console.log('[MailBot Compose] Generating draft for intent:', intent);
+        
+        // Show loading state
+        generateBtn.textContent = 'Generating...';
+        generateBtn.disabled = true;
+        generateBtn.style.opacity = '0.7';
+        generateBtn.style.cursor = 'not-allowed';
+        
+        // PHASE A: Simulate generation with setTimeout
+        await new Promise(resolve => setTimeout(resolve, 700));
+        
+        // PHASE A: Generate mock subject and body
+        generatedDraft = {
+          subject: `Re: ${intent.substring(0, 50)}${intent.length > 50 ? '...' : ''}`,
+          body: `Hello,\n\n${intent}\n\nBest regards,\n[Your Name]`
+        };
+        
+        console.log('[MailBot Compose] Generated draft:', generatedDraft);
+        
+        // Show preview
+        previewSubject.textContent = generatedDraft.subject;
+        previewBody.textContent = generatedDraft.body;
+        composePreview.style.display = 'block';
+        positionComposePanel(); // Reposition to show preview
+        
+        // Enable Insert button
+        insertBtn.disabled = false;
+        insertBtn.style.opacity = '1';
+        insertBtn.style.cursor = 'pointer';
+        
+        // Reset Generate button
+        generateBtn.textContent = 'Generate';
+        generateBtn.disabled = false;
+        generateBtn.style.opacity = '1';
+        generateBtn.style.cursor = 'pointer';
+        
+        console.log('[MailBot Compose] Preview displayed');
+        
+      } catch (error) {
+        console.error('[MailBot Compose] Generation error:', error);
+        generateBtn.textContent = 'Generate';
+        generateBtn.disabled = false;
+        generateBtn.style.opacity = '1';
+        generateBtn.style.cursor = 'pointer';
+        alert('Failed to generate draft: ' + error.message);
+      }
+    });
+    
+    // Regenerate button click
+    regenerateBtn.addEventListener('click', async () => {
+      try {
+        const intent = intentInput.value.trim();
+        
+        if (!intent) return;
+        
+        console.log('[MailBot Compose] Regenerating draft');
+        
+        regenerateBtn.textContent = 'Regenerating...';
+        regenerateBtn.disabled = true;
+        regenerateBtn.style.opacity = '0.7';
+        
+        // PHASE A: Simulate regeneration
+        await new Promise(resolve => setTimeout(resolve, 700));
+        
+        // Generate different mock content
+        generatedDraft = {
+          subject: `About: ${intent.substring(0, 50)}${intent.length > 50 ? '...' : ''}`,
+          body: `Hi there,\n\n${intent}\n\nThank you,\n[Your Name]`
+        };
+        
+        previewSubject.textContent = generatedDraft.subject;
+        previewBody.textContent = generatedDraft.body;
+        
+        regenerateBtn.textContent = 'Regenerate';
+        regenerateBtn.disabled = false;
+        regenerateBtn.style.opacity = '1';
+        
+        console.log('[MailBot Compose] Draft regenerated');
+        
+      } catch (error) {
+        console.error('[MailBot Compose] Regeneration error:', error);
+        regenerateBtn.textContent = 'Regenerate';
+        regenerateBtn.disabled = false;
+        regenerateBtn.style.opacity = '1';
+      }
+    });
+    
+    // Insert button click
+    insertBtn.addEventListener('click', () => {
+      try {
+        if (!generatedDraft) {
+          console.warn('[MailBot Compose] No draft to insert');
+          return;
+        }
+        
+        console.log('[MailBot Compose] Inserting draft into Gmail');
+        
+        // Get edited content from preview (user may have edited it)
+        const finalSubject = previewSubject.textContent.trim();
+        const finalBody = previewBody.textContent.trim();
+        
+        // Insert subject
+        if (subjectField && finalSubject) {
+          subjectField.value = finalSubject;
+          // Trigger input event so Gmail recognizes the change
+          subjectField.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        
+        // Insert body
+        if (editableField && finalBody) {
+          // Clear existing content
+          editableField.innerHTML = '';
+          
+          // Insert line by line
+          const lines = finalBody.split('\n');
+          lines.forEach((line, index) => {
+            const textNode = document.createTextNode(line);
+            editableField.appendChild(textNode);
+            
+            if (index < lines.length - 1) {
+              editableField.appendChild(document.createElement('br'));
+            }
+          });
+          
+          // Trigger input event
+          editableField.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        
+        // Collapse UI
+        composePanel.style.display = 'none';
+        composePreview.style.display = 'none';
+        
+        console.log('[MailBot Compose] ✓ Draft inserted successfully');
+        
+      } catch (error) {
+        console.error('[MailBot Compose] Insert error:', error);
+        alert('Failed to insert draft: ' + error.message);
+      }
+    });
+    
+    // Back button click
+    backBtn.addEventListener('click', () => {
+      composePanel.style.display = 'none';
+      composePreview.style.display = 'none';
+      
+      // Show default reply UI
+      if (dualPill) dualPill.style.display = '';
+      
+      console.log('[MailBot Compose] Closed compose UI');
+    });
+    
+    console.log('[MailBot Compose] ✓ Compose UI attached successfully');
+    
+  } catch (error) {
+    console.error('[MailBot Compose] Error attaching compose UI:', error);
+  }
 }
 
 /**
