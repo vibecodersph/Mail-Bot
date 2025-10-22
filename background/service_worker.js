@@ -109,11 +109,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       message.userIntent,
       message.tone
     )
-      .then(generatedText => {
+      .then(async generatedText => {
+        // Get user settings for signature
+        const settings = await chrome.storage.local.get(['fullName', 'title', 'contactNumber']);
+        console.log('[MailBot] Signature settings:', settings);
+        
+        // Build signature
+        const signatureParts = [];
+        if (settings.fullName && settings.fullName.trim()) {
+          signatureParts.push(settings.fullName.trim());
+        }
+        if (settings.title && settings.title.trim()) {
+          signatureParts.push(settings.title.trim());
+        }
+        if (settings.contactNumber && settings.contactNumber.trim()) {
+          signatureParts.push(settings.contactNumber.trim());
+        }
+        
+        console.log('[MailBot] Signature parts:', signatureParts);
+        
+        let finalText = generatedText;
+        
+        // Add signature if it exists
+        if (signatureParts.length > 0) {
+          const signature = signatureParts.join('\n');
+          
+          // Check if the exact signature block already exists at the end
+          const signatureAlreadyExists = generatedText.trim().endsWith(signature);
+          
+          if (!signatureAlreadyExists) {
+            finalText = `${generatedText}\n\n${signature}`;
+            console.log('[MailBot] ✓ Signature appended to generated email');
+          } else {
+            console.log('[MailBot] ℹ Signature already exists at end of email, skipping');
+          }
+        }
+        
         console.log('[MailBot] ✓ Reply generated successfully');
         sendResponse({
           success: true,
-          generatedText: generatedText
+          generatedText: finalText
         });
       })
       .catch(error => {

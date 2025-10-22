@@ -4,10 +4,10 @@
 
 **MailBot** is a Chrome extension that revolutionizes email composition in Gmail by leveraging Google's Gemini Nano AI model to generate contextually-aware, personalized email responses directly in the browser—fully on-device, with no data leaving the user's machine.
 
-**Version**: 0.1.0  
-**Status**: Production-Ready MVP  
+**Version**: 0.2.0  
+**Status**: Production-Ready with Enhanced Signature Support  
 **License**: MIT  
-**Repository**: https://github.com/gerdguerrero/Mail-Bot
+**Repository**: https://github.com/vibecodersph/Mail-Bot
 
 ---
 
@@ -28,6 +28,8 @@ MailBot provides an intelligent AI assistant that:
 - ✅ Maintains proper sender/recipient identity (critical for avoiding confusion)
 - ✅ Adapts tone and length to user preferences
 - ✅ Uses preferred greetings and closings
+- ✅ **Automatically adds professional email signatures with title and contact info**
+- ✅ **Intelligently removes duplicate names to prevent signature conflicts**
 - ✅ Operates entirely offline with on-device AI (privacy-first)
 - ✅ Provides preview-before-send workflow for user control
 
@@ -112,10 +114,14 @@ MailBot provides an intelligent AI assistant that:
 - **Design**: Matches on-page UI aesthetic
 - **Background**: Solid black (#111111)
 - **Sections**:
-  - Personal Information (Full Name)
+  - Personal Information (Full Name, Title, Contact Number)
   - Email Preferences (Tone, Length)
   - Common Phrases (Greetings, Closings)
-- **Input Fields**: Rounded pills (20px radius)
+- **Input Fields**: Rounded pills (20px radius) with dark theme styling
+  - Background: #2a2a2a
+  - Text: #fff (white)
+  - Placeholder: rgba(255,255,255,0.6)
+  - Border: 1.5px transparent (hover: #444444, focus: #666666)
 - **Save Button**: High-contrast white pill
 
 ---
@@ -186,11 +192,13 @@ Examples:
 "PeterBenjaminParker" → "Peter Benjamin Parker"
 ```
 
-### 5. **User Preferences System**
+### User Preferences System**
 **Storage**: `chrome.storage.local` (persistent)
 
 **Settings**:
 - **Full Name**: Used for email signatures
+- **Job Title**: Professional title shown in signature (optional)
+- **Contact Number**: Phone number for signature (optional, validated format)
 - **Default Tone**: Neutral, Friendly, Formal, Concise
 - **Email Length**: Short (2-3 sentences), Average (4-6), Long (7-10)
 - **Preferred Greetings**: Up to 3 custom greetings (comma-separated)
@@ -202,12 +210,14 @@ User Flow:
 1. Click MailBot → Expand panel
 2. Enter intent → Click "Generate"
 3. AI generates → Preview appears below
-4. User reviews/edits preview (contenteditable)
-5. Click "Insert" → Email inserted into Gmail compose field
-6. User reviews again in Gmail → Sends manually
+4. **Signature automatically added with title and contact info**
+5. User reviews/edits preview (contenteditable)
+6. Click "Insert" → Email inserted into Gmail compose field
+7. User reviews again in Gmail → Sends manually
 ```
 
 **Safety Net**: Two review steps prevent accidental sends
+**Signature Intelligence**: Automatically detects and removes duplicate names from AI-generated closings
 
 ### 7. **Drag & Reposition**
 - Collapsed button is draggable
@@ -221,6 +231,25 @@ User Flow:
 - **Expand/Collapse**: Seamless state changes
 - **Preview Appearance**: Smooth fade-in after generation
 - **Hover Effects**: Scale transforms on buttons (1.02x)
+
+### 9. **Professional Email Signatures** ⭐ NEW
+```javascript
+Features:
+- Automatic signature appending to all generated emails
+- Multi-field support: Full Name, Job Title, Contact Number
+- Smart duplicate detection: Removes AI-generated name instances
+- Handles both inline (Regards, Name) and standalone formats
+- Processes multiple duplicate instances in closing area
+- Clean signature format: Name\nTitle\nContact Number
+```
+
+**Signature Logic**:
+1. User configures name, title, and contact in settings
+2. AI generates email with closing (may include user's name)
+3. System detects all name instances in last 5 lines
+4. Removes duplicate names (inline or standalone)
+5. Appends complete signature block once at end
+6. Result: Professional signature without duplication
 
 ---
 
@@ -330,10 +359,12 @@ Model Download (chrome://components):
 ```
 1. Click MailBot icon in toolbar
 2. Enter full name (e.g., "Peter Benjamin Parker")
-3. Set default tone (Neutral, Friendly, Formal, Concise)
-4. Set email length (Short, Average, Long)
-5. (Optional) Add custom greetings/closings
-6. Click "Save Settings"
+3. (Optional) Enter job title (e.g., "Senior Software Engineer")
+4. (Optional) Enter contact number (e.g., "+1 (555) 123-4567")
+5. Set default tone (Neutral, Friendly, Formal, Concise)
+6. Set email length (Short, Average, Long)
+7. (Optional) Add custom greetings/closings
+8. Click "Save Settings"
 ```
 
 ---
@@ -485,6 +516,29 @@ Position Retention:
 - Resets on collapse/expand cycle
 ```
 
+#### 7. **Email Signature Management** ⭐ NEW
+```javascript
+Signature Detection & Cleanup:
+1. Scans last 5 lines of AI-generated email
+2. Identifies user name in closing area (case-insensitive)
+3. Detects inline format: "Regards, Joseph Miguel Guerrero"
+4. Detects standalone format: Name on separate line
+5. Removes ALL duplicate instances (handles multiple closings)
+6. Appends clean signature block once
+
+Regex Escaping:
+- Escapes special characters in user name for safe regex matching
+- Handles names with spaces, hyphens, apostrophes
+
+Format Enforcement:
+- AI prompt instructs: "Put closing on its own line, then name on next line"
+- Example format enforced:
+  Regards,
+  Joseph Miguel Guerrero
+  
+  NOT: Regards, Joseph Miguel Guerrero
+```
+
 ### Performance Optimizations
 
 ```javascript
@@ -574,10 +628,25 @@ Test Cases:
 Test Cases:
 ✅ Save settings → Reload extension → Settings retained
 ✅ Change name → Generate email → New name in signature
+✅ **Add title → Generate → Title appears in signature below name**
+✅ **Add contact → Generate → Contact appears in signature below title**
+✅ **Empty optional fields → Generate → Signature skips empty fields**
 ✅ Change greetings → Generate → Uses custom greetings
 ✅ Change closings → Generate → Uses custom closings
 ✅ Change tone → Generate → Tone reflects choice
 ✅ Change length → Generate → Length matches setting
+```
+
+#### **Signature Handling** ⭐ NEW
+```
+Test Cases:
+✅ AI generates "Regards, Name" inline → Name removed, signature appended
+✅ AI generates "Regards,\nName" separate lines → Name replaced with full signature
+✅ AI generates multiple closings → All name instances removed, one signature added
+✅ AI generates without name → Signature appended normally
+✅ Signature format: Name\nTitle\nContact (skips empty fields)
+✅ Contact number validation: Only numbers, +, -, spaces, parentheses allowed
+✅ Dark theme styling: All inputs have consistent #2a2a2a background
 ```
 
 ### Edge Cases Handled
@@ -610,8 +679,17 @@ Test Cases:
 9. Concatenated multi-word names:
    → Normalization splits them correctly
 
-10. No Gemini Nano model:
+9. No Gemini Nano model:
     → Clear error message with setup instructions
+
+10. **AI adds name inline with closing**:
+    → Detected and removed, signature appended properly
+
+11. **AI adds multiple closing sections**:
+    → All duplicate names removed, single signature added
+
+12. **Empty signature fields (title/contact)**:
+    → Skipped gracefully, only non-empty fields included
 ```
 
 ---
@@ -621,10 +699,11 @@ Test Cases:
 ### Code Statistics
 ```
 Total Lines: 3,400+
-Main Content Script: 1,800+ lines
+Main Content Script: 3,400+ lines (increased with signature logic)
 Languages: JavaScript (95%), HTML (3%), CSS (2%)
 Files: 14
-Commits: 2+ (initial + license)
+Commits: 50+ (including signature feature enhancements)
+Branch: gerd (active development)
 ```
 
 ### Features Implemented
@@ -642,6 +721,11 @@ Commits: 2+ (initial + license)
 ✅ Custom greetings/closings support
 ✅ Tone adaptation (4 modes)
 ✅ Length control (3 levels)
+✅ **Professional email signatures (Name + Title + Contact)**
+✅ **Smart duplicate name detection and removal**
+✅ **Inline and standalone signature format handling**
+✅ **Dark theme input styling (.mailbot-input class)**
+✅ **Contact number validation (tel input with pattern)**
 ```
 
 ### Innovation Highlights
@@ -652,6 +736,9 @@ Commits: 2+ (initial + license)
 🌟 Dynamic name normalization
 🌟 Persistent drag positioning with typing lock
 🌟 Two-stage review workflow
+🌟 **Intelligent signature management with duplicate detection**
+🌟 **Multi-field professional signatures (Title + Contact)**
+🌟 **Pattern-aware closing format enforcement**
 ```
 
 ---
@@ -721,6 +808,8 @@ Commits: 2+ (initial + license)
 🔲 Undo/Redo for preview edits
 🔲 Export/Import settings
 🔲 Dark/Light theme toggle
+🔲 Signature preview in settings popup
+🔲 Rich text signature formatting (bold, links)
 ```
 
 ### Medium-Term
@@ -868,6 +957,9 @@ Special Thanks:
 ✅ Smooth animations
 ✅ Name normalization
 ✅ Comprehensive documentation
+✅ **Professional email signatures with title and contact**
+✅ **Smart duplicate detection and removal**
+✅ **Dark theme styling across all inputs**
 ```
 
 ### Quality Metrics (✅ Met)
@@ -901,20 +993,27 @@ Special Thanks:
 **MailBot** represents a significant achievement in privacy-preserving AI assistants for productivity. By leveraging Chrome's built-in Gemini Nano model, it provides powerful email generation capabilities without compromising user privacy—a critical differentiator in today's data-conscious world.
 
 The project successfully demonstrates:
-- **Technical Innovation**: Identity confusion prevention, name normalization, context-aware generation
-- **User-Centric Design**: Preview workflow, drag & drop, smooth animations, dark aesthetic
+- **Technical Innovation**: Identity confusion prevention, name normalization, context-aware generation, intelligent signature management
+- **User-Centric Design**: Preview workflow, drag & drop, smooth animations, dark aesthetic, professional signatures
 - **Privacy Excellence**: 100% on-device processing, zero data collection
-- **Production Quality**: Comprehensive error handling, validation, edge case management
+- **Production Quality**: Comprehensive error handling, validation, edge case management, duplicate detection
+
+**Recent Enhancements (v0.2.0)**:
+- ✨ Professional email signatures with job title and contact number
+- ✨ Smart duplicate name detection (handles inline and standalone formats)
+- ✨ AI prompt optimization for proper closing format
+- ✨ Dark theme styling consistency across all input fields
+- ✨ Contact number validation with proper input type
 
 This document serves as both a technical specification and a showcase of the project's depth, making it ideal for presentations, portfolio demonstrations, and technical discussions.
 
 ---
 
 **Built with ❤️ by Joseph Miguel Guerrero**  
-**For questions or collaboration: https://github.com/gerdguerrero/Mail-Bot**
+**For questions or collaboration: https://github.com/vibecodersph/Mail-Bot**
 
 ---
 
-*Last Updated: October 8, 2025*  
-*Document Version: 1.0*  
-*Project Version: 0.1.0*
+*Last Updated: October 22, 2025*  
+*Document Version: 2.0*  
+*Project Version: 0.2.0*
