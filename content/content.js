@@ -1116,10 +1116,13 @@ This is attempt ${attemptNumber} - previous attempt had identity confusion. Be e
   // Detect conversation language
   const detectedLanguage = detectConversationLanguage(threadContext.emails);
   
+  // Check if this is a brand new compose (no existing thread)
+  const isNewCompose = !threadContext.emails || threadContext.emails.length === 0;
+  
   // Build comprehensive prompt
   const prompt = `You are writing an email on behalf of ${userEmail}.
 Your name is: ${userDisplayName}
-You are ${userDisplayName} writing to ${recipientName}.
+${isNewCompose ? `You are writing a NEW email.` : `You are ${userDisplayName} writing to ${recipientName}.`}
 
 ═══════════════════════════════════════
 IDENTITY DECLARATION
@@ -1130,11 +1133,13 @@ YOUR IDENTITY: ${userEmail}
 - You are the SENDER of this email
 - Write from first-person perspective (I, me, my)
 
-RECIPIENT IDENTITY: ${recipientEmail}
+${isNewCompose ? `RECIPIENT: Unknown (user will fill in)
+- Write the email body only
+- Use appropriate greeting (Hi, Hello, etc.)` : `RECIPIENT IDENTITY: ${recipientEmail}
 - Their name: ${recipientName}
 - This is who you are writing TO
 - Address them in the email (or use "Hi", "Hello")
-- DO NOT address yourself (${userDisplayName})
+- DO NOT address yourself (${userDisplayName})`}
 
 ═══════════════════════════════════════
 LANGUAGE REQUIREMENT
@@ -1142,7 +1147,7 @@ LANGUAGE REQUIREMENT
 DETECTED CONVERSATION LANGUAGE: ${detectedLanguage}
 
 ⚠️ CRITICAL: Write your ENTIRE response in ${detectedLanguage}.
-- Match the language used in the conversation history below
+${isNewCompose ? `- Default to English unless user's intent specifies another language` : `- Match the language used in the conversation history below`}
 - If the user specifies a different language in their intent, use that instead
 - Otherwise, ALWAYS use ${detectedLanguage} to maintain conversation consistency
 - Translate ALL parts of the email including greetings, body, and closings to ${detectedLanguage}
@@ -1164,20 +1169,20 @@ CLOSING OPTIONS (translate to ${detectedLanguage} if needed): ${closings.join(',
 EMAIL LENGTH: ${lengthInstructions[emailLength]}
 
 ═══════════════════════════════════════
-CONVERSATION HISTORY
+${isNewCompose ? 'NEW EMAIL (No existing conversation)' : 'CONVERSATION HISTORY'}
 ═══════════════════════════════════════
-SUBJECT: ${threadContext.subject}
+${isNewCompose ? 'This is a brand new email. No previous thread exists.' : `SUBJECT: ${threadContext.subject}
 
-${conversationHistory}
+${conversationHistory}`}
 
-═══════════════════════════════════════
+${isNewCompose ? '' : `═══════════════════════════════════════
 CURRENT SITUATION
 ═══════════════════════════════════════
 ${situationAnalysis}
 
 - Thread length: ${conversationState.threadLength} message(s)
 - Last sender: ${conversationState.lastSenderWasUser ? `YOU (${userEmail})` : conversationState.respondingTo || 'Other party'}
-- Message type: ${conversationState.isFollowUp ? 'Follow-up' : conversationState.respondingTo ? 'Response' : 'New message'}
+- Message type: ${conversationState.isFollowUp ? 'Follow-up' : conversationState.respondingTo ? 'Response' : 'New message'}`}
 
 ═══════════════════════════════════════
 USER'S INTENT
@@ -1189,43 +1194,46 @@ INSTRUCTIONS
 ═══════════════════════════════════════
 Write a ${toneInstructions[tone] || 'professional'} email that:
 
-1. ✓ Starts with one of: ${greetings.join(', ')}
+1. ✓ Starts with an appropriate greeting: ${greetings.join(', ')}
 2. ✓ Is from ${userEmail}'s perspective (use "I", "my", "me")
-3. ✓ Addresses ${recipientEmail} (not yourself)
-4. ✓ Accomplishes this intent: "${userIntent}"
-5. ✓ Maintains appropriate context from the conversation
-6. ✓ Uses a ${tone} tone
-7. ✓ Length: ${lengthInstructions[emailLength]}
-8. ✓ Is ready to send (no placeholders like [insert X])
-9. ✓ Does NOT include "Subject:" or "Re:" lines (Gmail handles that)
-10. ✓ Ends with one of: ${closings.join(', ')}
-11. ✓ Signs as "${userDisplayName}" NOT "${recipientName}"
-12. ✓ FORMAT CLOSING PROPERLY: Put closing on its own line, then name on next line
+${isNewCompose ? '' : `3. ✓ Addresses ${recipientEmail} (not yourself)`}
+3. ✓ Accomplishes this intent: "${userIntent}"
+${isNewCompose ? '' : `5. ✓ Maintains appropriate context from the conversation`}
+4. ✓ Uses a ${tone} tone
+5. ✓ Length: ${isNewCompose ? '8-12 sentences with full context and details. Since this is a NEW email starting a conversation, provide comprehensive background, clear purpose, and sufficient elaboration' : lengthInstructions[emailLength]}
+6. ✓ Is ready to send (no placeholders like [insert X])
+7. ✓ Does NOT include "Subject:" or "Re:" lines (Gmail handles that)
+8. ✓ Ends with one of: ${closings.join(', ')}
+9. ✓ Signs as "${userDisplayName}"${isNewCompose ? '' : ` NOT "${recipientName}"`}
+10. ✓ FORMAT CLOSING PROPERLY: Put closing on its own line, then name on next line
     Example:
     Regards,
     ${userDisplayName}
     
     NOT: Regards, ${userDisplayName}
-${conversationState.isFollowUp ? '13. ✓ Clearly indicates this is a follow-up' : ''}
-${conversationState.respondingTo ? '13. ✓ Directly responds to their message' : ''}
+${conversationState.isFollowUp ? '11. ✓ Clearly indicates this is a follow-up' : ''}
+${conversationState.respondingTo ? '11. ✓ Directly responds to their message' : ''}
 
 CRITICAL REMINDERS:
 ❌ DO NOT write "Dear ${userDisplayName}" or "Hi ${userDisplayName}" - that's you!
 ❌ DO NOT write about ${userDisplayName} in third person - use "I"
 ❌ DO NOT include "Subject: Re: ..." in the email body
-❌ DO NOT sign with "${recipientName}" - that's the RECIPIENT, not you!
-❌ DO NOT sign with "${recipientEmail}" - that's who you're writing TO!
+❌ DO NOT simply restate the user's intent - WRITE THE ACTUAL EMAIL
+❌ DO NOT output instructions or meta-text - ONLY output the email content
+${isNewCompose ? '' : `❌ DO NOT sign with "${recipientName}" - that's the RECIPIENT, not you!
+❌ DO NOT sign with "${recipientEmail}" - that's who you're writing TO!`}
 ❌ DO NOT use English greetings/closings if writing in ${detectedLanguage} (unless it's English)
 ✓ DO write from ${userDisplayName}'s perspective using first-person
-✓ DO address ${recipientName} or use general greetings
+${isNewCompose ? '' : `✓ DO address ${recipientName} or use general greetings`}
 ✓ DO translate greetings to ${detectedLanguage}: ${greetings.join(', ')} → use appropriate ${detectedLanguage} equivalents
 ✓ DO translate closings to ${detectedLanguage}: ${closings.join(', ')} → use appropriate ${detectedLanguage} equivalents
 ✓ DO sign with "${userDisplayName}" or just your first name
-✓ YOU ARE ${userDisplayName}, NOT ${recipientName}
+${isNewCompose ? '' : `✓ YOU ARE ${userDisplayName}, NOT ${recipientName}`}
 ✓ EVERYTHING must be in ${detectedLanguage} - greetings, body, AND closings
+✓ WRITE THE ACTUAL EMAIL - not meta-commentary about writing it
 
 ═══════════════════════════════════════
-YOUR EMAIL REPLY (from ${userEmail} to ${recipientEmail}):
+OUTPUT THE COMPLETE EMAIL NOW (from ${userEmail}${isNewCompose ? '' : ` to ${recipientEmail}`}):
 ═══════════════════════════════════════`;
   
   console.log('[MailBot] Sending prompt to AI...');
@@ -1240,9 +1248,16 @@ YOUR EMAIL REPLY (from ${userEmail} to ${recipientEmail}):
   let result = await session.prompt(prompt);
   
   console.log('[MailBot] AI response received, length:', result.length);
+  console.log('[MailBot] AI raw output:', result.substring(0, 200));
   
   // Clean up session
   session.destroy();
+  
+  // Unescape any literal \n sequences if AI outputted them
+  if (result.includes('\\n')) {
+    console.log('[MailBot] ⚠️ Found literal \\n sequences, unescaping...');
+    result = result.replace(/\\n/g, '\n');
+  }
   
   // Apply signature fix (fallback post-processing)
   result = fixSignature(result, userDisplayName, recipientEmail);
@@ -4009,13 +4024,116 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
       
       console.log('[MailBot Compose] Generating draft for intent:', intent);
       
-      // PHASE A: Simulate generation with setTimeout
-      await new Promise(resolve => setTimeout(resolve, 700));
+      // Call AI generation
+      const threadContext = extractThreadContext(editableField);
       
-      // PHASE A: Generate mock subject and body
+      // Get default tone from storage
+      const { defaultTone } = await chrome.storage.local.get(['defaultTone']);
+      const tone = defaultTone || 'neutral';
+      
+      console.log('[MailBot Compose] Calling AI with context...');
+      let result = await generateWithAI(
+        threadContext,
+        intent,
+        tone,
+        1 // Attempt 1
+      );
+      
+      // Check validation and retry if needed
+      if (!result.validation.isValid && result.attemptNumber < 2) {
+        console.warn('[MailBot Compose] Validation failed, retrying...');
+        result = await generateWithAI(
+          threadContext,
+          intent,
+          tone,
+          2 // Attempt 2
+        );
+      }
+      
+      console.log('[MailBot Compose] AI generation complete');
+      
+      // Add signature if configured
+      const settings = await chrome.storage.local.get(['fullName', 'title', 'contactNumber']);
+      const signatureParts = [];
+      if (settings.fullName && settings.fullName.trim()) {
+        signatureParts.push(settings.fullName.trim());
+      }
+      if (settings.title && settings.title.trim()) {
+        signatureParts.push(settings.title.trim());
+      }
+      if (settings.contactNumber && settings.contactNumber.trim()) {
+        signatureParts.push(settings.contactNumber.trim());
+      }
+      
+      let finalBody = result.text;
+      
+      // Add signature if configured
+      if (signatureParts.length > 0 && settings.fullName) {
+        const signature = signatureParts.join('\n');
+        const lines = result.text.trim().split('\n');
+        const nameParts = settings.fullName.toLowerCase().split(/\s+/);
+        
+        // Check if AI already added name in closing
+        const lastFewLines = lines.slice(-3).join('\n').toLowerCase();
+        const hasName = nameParts.some(part => part.length > 2 && lastFewLines.includes(part));
+        
+        if (hasName) {
+          // Remove AI's name and add full signature
+          const filteredLines = lines.filter((line, index) => {
+            if (index < lines.length - 3) return true;
+            const lineLower = line.toLowerCase().trim();
+            return !nameParts.some(part => part.length > 2 && lineLower.includes(part));
+          });
+          finalBody = `${filteredLines.join('\n')}\n\n${signature}`;
+        } else {
+          finalBody = `${result.text}\n\n${signature}`;
+        }
+      }
+      
+      // Generate proper subject line
+      let subject;
+      if (threadContext.subject && threadContext.subject !== 'No subject') {
+        subject = threadContext.subject;
+      } else {
+        // Ask AI to generate a subject line
+        console.log('[MailBot Compose] Generating subject line...');
+        const subjectPrompt = `Based on this email content, write ONLY a short, professional subject line (3-6 words max).
+
+Rules:
+- NO names (sender or recipient)
+- NO quotes or punctuation at the end
+- NO "Subject:" prefix
+- Just the topic/purpose
+
+Email content:
+${finalBody.substring(0, 300)}
+
+Subject line:`;
+        
+        try {
+          const subjectSession = await LanguageModel.create({ 
+            systemPrompt: 'You generate concise email subject lines. Output ONLY the subject line without names, quotes, or prefixes.' 
+          });
+          const generatedSubject = await subjectSession.prompt(subjectPrompt);
+          subjectSession.destroy();
+          
+          // Clean up subject (remove quotes, "Subject:", names, etc.)
+          subject = generatedSubject
+            .replace(/^(Subject:|Re:|Fwd:)\s*/i, '')
+            .replace(/^["']|["']$/g, '')
+            .replace(/\s*-\s*.+$/, '') // Remove " - Name" patterns
+            .trim();
+          
+          console.log('[MailBot Compose] Generated subject:', subject);
+        } catch (error) {
+          console.warn('[MailBot Compose] Failed to generate subject, using fallback');
+          subject = intent.substring(0, 50) + (intent.length > 50 ? '...' : '');
+        }
+      }
+      
       generatedDraft = {
-        subject: `Re: ${intent.substring(0, 50)}${intent.length > 50 ? '...' : ''}`,
-        body: `Hello,\\n\\n${intent}\\n\\nBest regards,\\n[Your Name]`
+        subject: subject,
+        body: finalBody
       };
       
       // Update preview
@@ -4073,17 +4191,22 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
         subjectField.dispatchEvent(new Event('input', { bubbles: true }));
       }
       
-      // Insert body
+      // Insert body with proper line breaks
       if (editableField && finalBody) {
         editableField.innerHTML = '';
-        const lines = finalBody.split('\\n');
+        
+        // Split by newlines and create proper structure
+        const lines = finalBody.split('\n');
         lines.forEach((line, index) => {
           const textNode = document.createTextNode(line);
           editableField.appendChild(textNode);
+          
+          // Add line break after each line except the last
           if (index < lines.length - 1) {
             editableField.appendChild(document.createElement('br'));
           }
         });
+        
         editableField.dispatchEvent(new Event('input', { bubbles: true }));
       }
       
