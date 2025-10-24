@@ -3515,11 +3515,18 @@ function smartPlacePanel(composeEl, panelEl, opts = {}) {
   });
   observer.observe(composeEl, { childList: true, subtree: true, attributes: false });
   
+  // Listen for manual recompute requests
+  const handleRecompute = () => {
+    computePosition();
+  };
+  panelEl.addEventListener('mailbot-recompute', handleRecompute);
+  
   // Return cleanup function
   return () => {
     clearTimeout(resizeTimeout);
     clearTimeout(observerTimeout);
     window.removeEventListener('resize', handleResize);
+    panelEl.removeEventListener('mailbot-recompute', handleRecompute);
     observer.disconnect();
     delete composeEl.dataset.mailbotInjected;
     if (panelEl.parentElement === composeEl) {
@@ -3890,7 +3897,9 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
           if (node === dialog || (node.contains && node.contains(dialog))) {
             console.log('[MailBot Compose] Compose dialog closed, cleaning up');
             clearTimeout(composeDOMTimeout);
+            clearTimeout(previewResizeTimeout);
             composeDOMObserver.disconnect();
+            window.removeEventListener('resize', handlePreviewResize);
             cleanupPanelPosition();
             cleanupPanelResize();
             if (cleanupPreviewPanel) cleanupPreviewPanel();
@@ -3913,6 +3922,7 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
       if (composePreview.style.display !== 'none') {
         const panelRect = composePanel.getBoundingClientRect();
         const dialogRect = dialog.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
         
         // Calculate position relative to dialog
         const relativeTop = panelRect.bottom - dialogRect.top + 8; // 8px gap
@@ -3943,8 +3953,34 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
           composePreview.style.maxWidth = '500px';
           composePreview.style.transform = 'translateX(-50%)';
         }
+        
+        // Viewport clamping: Calculate available space and adjust preview height
+        const previewTopInViewport = panelRect.bottom + 8;
+        const availableHeight = viewportHeight - previewTopInViewport - 20; // 20px bottom padding
+        
+        // Get preview content element for height control
+        const previewContent = composePreview.querySelector('.mb-preview-content');
+        if (previewContent && availableHeight > 100) {
+          // Set max-height to fit within viewport
+          // Account for preview header (~40px), padding (~28px), and borders
+          const maxContentHeight = Math.max(150, Math.min(400, availableHeight - 70));
+          previewContent.style.maxHeight = `${maxContentHeight}px`;
+          previewContent.style.overflowY = 'auto';
+        }
       }
     }
+    
+    // Add resize listener to reposition preview when viewport changes
+    let previewResizeTimeout;
+    const handlePreviewResize = () => {
+      clearTimeout(previewResizeTimeout);
+      previewResizeTimeout = setTimeout(() => {
+        if (composePreview.classList.contains('mailbot-visible')) {
+          positionPreview();
+        }
+      }, 150);
+    };
+    window.addEventListener('resize', handlePreviewResize);
     
     // State to hold generated draft
     let generatedDraft = null;
@@ -4341,6 +4377,10 @@ Subject line:`;
           panel.style.transition = '';
           panel.style.opacity = '';
           panel.style.transform = '';
+          
+          // Trigger recompute of panel position to ensure correct placement
+          const computeEvent = new CustomEvent('mailbot-recompute');
+          panel.dispatchEvent(computeEvent);
           
           // Reset button states to ensure they're interactive
           if (generateBtn) {

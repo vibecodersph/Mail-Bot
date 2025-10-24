@@ -440,6 +440,10 @@
   z-index: 9998;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   color: #E8EAED;
+  max-height: 40vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .mailbot-compose-preview .mb-preview-header {
@@ -447,6 +451,7 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
+  flex-shrink: 0;
 }
 
 .mailbot-compose-preview .mb-preview-label {
@@ -481,8 +486,11 @@
   color: #E8EAED;
   font-size: 13px;
   line-height: 1.5;
-  max-height: 300px;
+  max-height: none;
   overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  min-height: 0;
 }
 
 .mailbot-compose-preview .mb-preview-subject,
@@ -493,6 +501,8 @@
 
 .mailbot-compose-preview .mb-preview-body {
   white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid #2a2a2a;
