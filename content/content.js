@@ -1644,6 +1644,21 @@ function openComposeMode(editableField, container, composeBtn, summarizeBtn) {
     expandedPanel.style.opacity = '1';
     const input = expandedPanel.querySelector('.mailbot-input');
     if (input) input.focus();
+    
+    // Reset insert button state if there's no preview to insert
+    const insertBtn = expandedPanel.querySelector('.mailbot-insert-btn');
+    const previewContainer = container.querySelector('.mailbot-preview-container') || 
+                             document.querySelector('.mailbot-preview-container');
+    const hasVisiblePreview = previewContainer && previewContainer.style.display === 'block';
+    
+    if (insertBtn && !hasVisiblePreview) {
+      insertBtn.disabled = true;
+      insertBtn.style.opacity = '0.6';
+      insertBtn.style.cursor = 'not-allowed';
+      insertBtn.style.background = '#BDC1C6';
+      insertBtn.style.color = '#3C4043';
+      insertBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+    }
   }
   
   container.setAttribute('data-state', 'compose');
@@ -1699,6 +1714,20 @@ function openSummarizeMode(editableField, container, composeBtn, summarizeBtn) {
   
   summarizePanel.style.display = 'flex';
   summarizePanel.style.opacity = '1';
+  
+  // Reset copy button state if there's no preview to copy
+  const copyBtn = summarizePanel.querySelector('.mb-summary-copy');
+  const summarizePreview = document.querySelector('.mailbot-summarize-preview');
+  const hasVisiblePreview = summarizePreview && summarizePreview.style.display === 'flex';
+  
+  if (copyBtn && !hasVisiblePreview) {
+    copyBtn.disabled = true;
+    copyBtn.style.opacity = '0.6';
+    copyBtn.style.cursor = 'not-allowed';
+    copyBtn.style.background = '#BDC1C6';
+    copyBtn.style.color = '#3C4043';
+    copyBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+  }
   
   container.setAttribute('data-state', 'summarize');
 }
@@ -1837,19 +1866,46 @@ function styleSummarizePanel(panel) {
   copyBtn.style.minWidth = '88px';
   copyBtn.disabled = true;
   copyBtn.style.opacity = '0.6';
+  copyBtn.style.cursor = 'not-allowed';
+  copyBtn.style.cursor = 'not-allowed';
   
   copyBtn.addEventListener('mouseenter', () => {
     if (!copyBtn.disabled) {
-      copyBtn.style.background = '#A8ACB0';
-      copyBtn.style.transform = 'translateY(-1px)';
-      copyBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.25)';
+      // Check current state - if white (enabled), hover to lighter white
+      const isWhiteState = copyBtn.style.background === 'rgb(255, 255, 255)' || 
+                           copyBtn.style.background === '#ffffff';
+      if (isWhiteState) {
+        copyBtn.style.background = '#f8f9fa';
+        copyBtn.style.transform = 'translateY(-1px)';
+        copyBtn.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
+      } else {
+        copyBtn.style.background = '#A8ACB0';
+        copyBtn.style.transform = 'translateY(-1px)';
+        copyBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.25)';
+      }
     }
   });
   
   copyBtn.addEventListener('mouseleave', () => {
-    copyBtn.style.background = '#BDC1C6';
+    if (!copyBtn.disabled) {
+      // Restore to enabled state - check if it should be white or gray
+      const isWhiteState = copyBtn.style.background === 'rgb(248, 249, 250)' || 
+                           copyBtn.style.background === '#f8f9fa';
+      if (isWhiteState) {
+        copyBtn.style.background = '#ffffff';
+        copyBtn.style.color = '#000000';
+        copyBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+      } else {
+        copyBtn.style.background = '#BDC1C6';
+        copyBtn.style.color = '#3C4043';
+        copyBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+      }
+    } else {
+      copyBtn.style.background = '#BDC1C6';
+      copyBtn.style.color = '#3C4043';
+      copyBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+    }
     copyBtn.style.transform = 'translateY(0)';
-    copyBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
   });
   
   // Style close button - Ghost black style (like Back button)
@@ -2175,6 +2231,11 @@ ACTION ITEMS:`;
       // Mark as generated
       summaryGenerated = true;
       copyBtn.disabled = false;
+      copyBtn.style.opacity = '1';
+      copyBtn.style.cursor = 'pointer';
+      copyBtn.style.background = '#ffffff';
+      copyBtn.style.color = '#000000';
+      copyBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
       
       // Create preview container if it doesn't exist
       if (!previewContainer) {
@@ -2337,8 +2398,8 @@ function stylePreviewContainer(previewContainer) {
   // Body
   const body = previewContainer.querySelector('.mb-preview-body');
   body.style.padding = '14px';
-  body.style.background = 'rgba(42, 43, 46, 0.6)';
-  body.style.border = '1.5px solid rgba(58, 59, 62, 0.6)';
+  body.style.background = 'rgba(42, 43, 46, 0.8)';
+  body.style.border = '1.5px solid rgba(78, 79, 82, 0.8)';
   body.style.borderRadius = '8px';
   body.style.color = 'rgba(232, 234, 237, 0.95)';
   body.style.fontSize = '14px';
@@ -2350,6 +2411,7 @@ function stylePreviewContainer(previewContainer) {
   body.style.whiteSpace = 'pre-wrap';
   body.style.wordWrap = 'break-word';
   body.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+  body.style.cursor = 'text';
   
   // Metadata
   const meta = previewContainer.querySelector('.mb-preview-meta');
@@ -2644,16 +2706,42 @@ function attachMailBotButton(editableField, type = 'dialog') {
     
     insertBtn.addEventListener('mouseenter', () => {
       if (!insertBtn.disabled) {
-        insertBtn.style.background = '#A8ACB0';
-        insertBtn.style.transform = 'translateY(-1px)';
-        insertBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.25)';
+        // Check current state - if white (enabled), hover to lighter white
+        const isWhiteState = insertBtn.style.background === 'rgb(255, 255, 255)' || 
+                             insertBtn.style.background === '#ffffff';
+        if (isWhiteState) {
+          insertBtn.style.background = '#f8f9fa';
+          insertBtn.style.transform = 'translateY(-1px)';
+          insertBtn.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
+        } else {
+          insertBtn.style.background = '#A8ACB0';
+          insertBtn.style.transform = 'translateY(-1px)';
+          insertBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.25)';
+        }
       }
     });
     
     insertBtn.addEventListener('mouseleave', () => {
-      insertBtn.style.background = '#BDC1C6';
+      if (!insertBtn.disabled) {
+        // Restore to enabled state - check if it should be white or gray
+        // If button was enabled after generation, it should be white
+        const isWhiteState = insertBtn.style.background === 'rgb(248, 249, 250)' || 
+                             insertBtn.style.background === '#f8f9fa';
+        if (isWhiteState) {
+          insertBtn.style.background = '#ffffff';
+          insertBtn.style.color = '#000000';
+          insertBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+        } else {
+          insertBtn.style.background = '#BDC1C6';
+          insertBtn.style.color = '#3C4043';
+          insertBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+        }
+      } else {
+        insertBtn.style.background = '#BDC1C6';
+        insertBtn.style.color = '#3C4043';
+        insertBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+      }
       insertBtn.style.transform = 'translateY(0)';
-      insertBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
     });
     
     // Style disabled state for Insert button
@@ -2745,19 +2833,21 @@ function attachMailBotButton(editableField, type = 'dialog') {
     
     // Style preview content
     const previewContent = previewContainer.querySelector('.mailbot-preview-content');
-    previewContent.style.padding = '12px';
-    previewContent.style.background = '#1a1a1a';
-    previewContent.style.border = '1.5px solid #333333';
-    previewContent.style.borderRadius = '12px';
-    previewContent.style.color = '#ffffff';
+    previewContent.style.padding = '14px';
+    previewContent.style.background = 'rgba(42, 43, 46, 0.8)';
+    previewContent.style.border = '1.5px solid rgba(78, 79, 82, 0.8)';
+    previewContent.style.borderRadius = '8px';
+    previewContent.style.color = 'rgba(232, 234, 237, 0.95)';
     previewContent.style.fontSize = '14px';
     previewContent.style.lineHeight = '1.6';
     previewContent.style.whiteSpace = 'pre-wrap';
     previewContent.style.wordWrap = 'break-word';
-    previewContent.style.maxHeight = '300px';
+    previewContent.style.maxHeight = '40vh';
     previewContent.style.overflowY = 'auto';
     previewContent.style.outline = 'none';
-    previewContent.style.minHeight = '100px';
+    previewContent.style.minHeight = '150px';
+    previewContent.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+    previewContent.style.cursor = 'text';
     
     // Variable to store generated text
     let generatedText = null;
@@ -3066,6 +3156,16 @@ function attachMailBotButton(editableField, type = 'dialog') {
         generateBtn.disabled = false;
         generateBtn.style.opacity = '1';
         generateBtn.style.cursor = 'pointer';
+        
+        // Enable insert button if we have generated text - change to white (primary style)
+        if (generatedText) {
+          insertBtn.disabled = false;
+          insertBtn.style.opacity = '1';
+          insertBtn.style.cursor = 'pointer';
+          insertBtn.style.background = '#ffffff';
+          insertBtn.style.color = '#000000';
+          insertBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+        }
       }
     });
     
