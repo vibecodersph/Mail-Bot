@@ -1536,34 +1536,64 @@ function injectDualModePill(editableField, container, type) {
   
   // Style the dual pill container
   dualPill.style.display = 'inline-flex';
-  dualPill.style.background = '#000000';
-  dualPill.style.border = '1.5px solid #000000';
-  dualPill.style.borderRadius = '16px';
-  dualPill.style.padding = '8px 12px';  // Increased padding for larger draggable area
-  dualPill.style.gap = '12px';  // Increased gap between buttons for easier dragging
-  dualPill.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+  dualPill.style.background = 'rgba(30, 31, 34, 0.95)';
+  dualPill.style.backdropFilter = 'blur(12px) saturate(180%)';
+  dualPill.style.webkitBackdropFilter = 'blur(12px) saturate(180%)';
+  dualPill.style.border = '1.5px solid rgba(58, 59, 62, 0.6)';
+  dualPill.style.borderRadius = '12px';
+  dualPill.style.padding = '6px';
+  dualPill.style.gap = '4px';
+  dualPill.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
   dualPill.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-  dualPill.style.cursor = 'grab';  // Show grab cursor on the container
-  dualPill.style.marginBottom = '12px';  // Add spacing between pill and panels below
+  dualPill.style.cursor = 'grab';
+  dualPill.style.marginBottom = '12px';
   
   // Style individual mode buttons
   [composeBtn, summarizeBtn].forEach(btn => {
-    btn.style.padding = '8px 16px';
+    btn.style.padding = '8px 20px';
     btn.style.background = 'transparent';
-    btn.style.color = 'rgba(255, 255, 255, 0.6)';
+    btn.style.color = 'rgba(232, 234, 237, 0.6)';
     btn.style.border = 'none';
-    btn.style.borderRadius = '12px';
-    btn.style.cursor = 'pointer';  // Pointer cursor on buttons
-    btn.style.fontSize = '14px';
+    btn.style.borderRadius = '8px';
+    btn.style.cursor = 'pointer';
+    btn.style.fontSize = '13px';
     btn.style.fontWeight = '500';
-    btn.style.transition = 'all 0.2s ease';
+    btn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
     btn.style.whiteSpace = 'nowrap';
-    btn.style.pointerEvents = 'auto'; // Ensure buttons are clickable
+    btn.style.pointerEvents = 'auto';
+    btn.style.minWidth = '90px';
+    btn.style.letterSpacing = '0.01em';
   });
   
   // Compose is active by default
   composeBtn.style.background = '#ffffff';
   composeBtn.style.color = '#000000';
+  composeBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.2)';
+  
+  // Add hover micro-interactions with lift
+  [composeBtn, summarizeBtn].forEach(btn => {
+    btn.addEventListener('mouseenter', function() {
+      const isActive = this.style.background === '#ffffff' || this.style.background === 'rgb(255, 255, 255)';
+      if (isActive) {
+        this.style.transform = 'translateY(-1px)';
+        this.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.3)';
+      } else {
+        this.style.background = 'rgba(58, 59, 62, 0.5)';
+        this.style.color = '#E8EAED';
+      }
+    });
+    
+    btn.addEventListener('mouseleave', function() {
+      const isActive = this.style.background === '#ffffff' || this.style.background === 'rgb(255, 255, 255)';
+      if (isActive) {
+        this.style.transform = 'none';
+        this.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.2)';
+      } else {
+        this.style.background = 'transparent';
+        this.style.color = 'rgba(232, 234, 237, 0.6)';
+      }
+    });
+  });
   
   // Event listeners for mode switching (will be checked in drag logic)
   composeBtn.addEventListener('click', (e) => {
@@ -1584,11 +1614,16 @@ function injectDualModePill(editableField, container, type) {
 function openComposeMode(editableField, container, composeBtn, summarizeBtn) {
   console.log('[MailBot] Opening Compose mode');
   
-  // Update button states
+  // Update button states with smooth transitions
   composeBtn.style.background = '#ffffff';
   composeBtn.style.color = '#000000';
+  composeBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.2)';
+  composeBtn.style.transform = 'none';
+  
   summarizeBtn.style.background = 'transparent';
-  summarizeBtn.style.color = 'rgba(255, 255, 255, 0.6)';
+  summarizeBtn.style.color = 'rgba(232, 234, 237, 0.6)';
+  summarizeBtn.style.boxShadow = 'none';
+  summarizeBtn.style.transform = 'none';
   
   // Hide summarize panel if visible
   const summarizePanel = container.querySelector('.mailbot-summarize-panel');
@@ -1620,11 +1655,16 @@ function openComposeMode(editableField, container, composeBtn, summarizeBtn) {
 function openSummarizeMode(editableField, container, composeBtn, summarizeBtn) {
   console.log('[MailBot] Opening Summarize mode');
   
-  // Update button states
+  // Update button states with smooth transitions
   summarizeBtn.style.background = '#ffffff';
   summarizeBtn.style.color = '#000000';
+  summarizeBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.2)';
+  summarizeBtn.style.transform = 'none';
+  
   composeBtn.style.background = 'transparent';
-  composeBtn.style.color = 'rgba(255, 255, 255, 0.6)';
+  composeBtn.style.color = 'rgba(232, 234, 237, 0.6)';
+  composeBtn.style.boxShadow = 'none';
+  composeBtn.style.transform = 'none';
   
   // Keep dual pill visible (don't hide it)
   
@@ -1675,10 +1715,16 @@ function createSummarizePanel(editableField) {
     <div class="mb-summary-header">
       <span class="mb-summary-title">What's being discussed?</span>
       <div class="mb-summary-compact-actions">
-        <button class="mb-summary-generate">Generate</button>
-        <button class="mb-summary-copy" disabled>Copy</button>
+        <button class="mb-summary-generate">
+          Generate
+          <span class="mailbot-loading-dot"></span>
+        </button>
+        <button class="mb-summary-copy" disabled>
+          Copy
+          <span class="mailbot-loading-dot"></span>
+        </button>
         <button class="mb-summary-close" title="Close">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M10 2L4 8L10 14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
@@ -1700,15 +1746,18 @@ function createSummarizePanel(editableField) {
  */
 function styleSummarizePanel(panel) {
   panel.style.display = 'none';
-  panel.style.flexDirection = 'column';
-  panel.style.background = '#000000';
-  panel.style.border = '1.5px solid #000000';
-  panel.style.borderRadius = '16px';
-  panel.style.padding = '10px 20px';
-  panel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+  panel.style.flexDirection = 'row';
+  panel.style.alignItems = 'center';
+  panel.style.background = 'rgba(30, 31, 34, 0.95)';
+  panel.style.backdropFilter = 'blur(12px) saturate(180%)';
+  panel.style.webkitBackdropFilter = 'blur(12px) saturate(180%)';
+  panel.style.border = '1.5px solid rgba(58, 59, 62, 0.6)';
+  panel.style.borderRadius = '12px';
+  panel.style.padding = '14px 16px';
+  panel.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
   panel.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
   panel.style.minWidth = '500px';
-  panel.style.gap = '0';
+  panel.style.gap = '12px';
   panel.style.opacity = '1';
   panel.style.cursor = 'grab';  // Make panel draggable
   
@@ -1718,18 +1767,19 @@ function styleSummarizePanel(panel) {
   header.style.justifyContent = 'space-between';
   header.style.alignItems = 'center';
   header.style.gap = '12px';
+  header.style.flex = '1';
   header.style.cursor = 'grab';  // Header is draggable
   
   const title = panel.querySelector('.mb-summary-title');
   title.style.fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
-  title.style.fontSize = '14px';
-  title.style.fontWeight = '600';
-  title.style.color = 'rgba(255, 255, 255, 0.9)';
-  title.style.marginBottom = '6px';
+  title.style.fontSize = '13px';
+  title.style.fontWeight = '500';
+  title.style.color = 'rgba(232, 234, 237, 0.7)';
   title.style.whiteSpace = 'nowrap';
   title.style.marginRight = '8px';
+  title.style.margin = '0';
   title.style.padding = '0';
-  title.style.lineHeight = 'normal';
+  title.style.lineHeight = '1.5';
   title.style.cursor = 'grab';  // Title is draggable
   
   // Compact actions container
@@ -1738,58 +1788,113 @@ function styleSummarizePanel(panel) {
   compactActions.style.gap = '8px';
   compactActions.style.alignItems = 'center';
   
-  // Style compact action buttons
+  // Style Generate button - White primary with loading dot
   const generateBtn = panel.querySelector('.mb-summary-generate');
-  const copyBtn = panel.querySelector('.mb-summary-copy');
-  const closeBtn = panel.querySelector('.mb-summary-close');
+  generateBtn.style.position = 'relative';
+  generateBtn.style.padding = '9px 32px 9px 18px';
+  generateBtn.style.background = '#ffffff';
+  generateBtn.style.color = '#000000';
+  generateBtn.style.border = 'none';
+  generateBtn.style.borderRadius = '8px';
+  generateBtn.style.fontSize = '13px';
+  generateBtn.style.fontWeight = '500';
+  generateBtn.style.cursor = 'pointer';
+  generateBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+  generateBtn.style.whiteSpace = 'nowrap';
+  generateBtn.style.letterSpacing = '0.01em';
+  generateBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+  generateBtn.style.minWidth = '88px';
   
-  [generateBtn, copyBtn].forEach(btn => {
-    btn.style.padding = '10px 20px';
-    btn.style.background = '#ffffff';
-    btn.style.color = '#000000';
-    btn.style.border = '1.5px solid #ffffff';
-    btn.style.borderRadius = '20px';
-    btn.style.fontSize = '14px';
-    btn.style.fontWeight = '500';
-    btn.style.cursor = 'pointer';
-    btn.style.transition = 'all 0.2s ease';
-    btn.style.whiteSpace = 'nowrap';
-    btn.style.letterSpacing = '0.3px';
-    btn.style.pointerEvents = 'auto';
-    
-    btn.addEventListener('mouseenter', () => {
-      btn.style.background = '#e8e8e8';
-      btn.style.transform = 'scale(1.02)';
-    });
-    
-    btn.addEventListener('mouseleave', () => {
-      btn.style.background = '#ffffff';
-      btn.style.transform = 'scale(1)';
-    });
+  generateBtn.addEventListener('mouseenter', () => {
+    if (!generateBtn.disabled) {
+      generateBtn.style.background = '#f8f9fa';
+      generateBtn.style.transform = 'translateY(-1px)';
+      generateBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.25)';
+    }
   });
   
-  // Style close button
-  closeBtn.style.padding = '8px';
-  closeBtn.style.background = '#ffffff';
-  closeBtn.style.color = '#000000';
+  generateBtn.addEventListener('mouseleave', () => {
+    generateBtn.style.background = '#ffffff';
+    generateBtn.style.transform = 'translateY(0)';
+    generateBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+  });
+  
+  // Style Copy button - Gray secondary with loading dot
+  const copyBtn = panel.querySelector('.mb-summary-copy');
+  copyBtn.style.position = 'relative';
+  copyBtn.style.padding = '9px 32px 9px 20px';
+  copyBtn.style.background = '#BDC1C6';
+  copyBtn.style.color = '#3C4043';
+  copyBtn.style.border = 'none';
+  copyBtn.style.borderRadius = '8px';
+  copyBtn.style.fontSize = '13px';
+  copyBtn.style.fontWeight = '500';
+  copyBtn.style.cursor = 'pointer';
+  copyBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+  copyBtn.style.whiteSpace = 'nowrap';
+  copyBtn.style.letterSpacing = '0.01em';
+  copyBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+  copyBtn.style.minWidth = '88px';
+  copyBtn.disabled = true;
+  copyBtn.style.opacity = '0.6';
+  
+  copyBtn.addEventListener('mouseenter', () => {
+    if (!copyBtn.disabled) {
+      copyBtn.style.background = '#A8ACB0';
+      copyBtn.style.transform = 'translateY(-1px)';
+      copyBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.25)';
+    }
+  });
+  
+  copyBtn.addEventListener('mouseleave', () => {
+    copyBtn.style.background = '#BDC1C6';
+    copyBtn.style.transform = 'translateY(0)';
+    copyBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+  });
+  
+  // Style close button - Ghost black style (like Back button)
+  const closeBtn = panel.querySelector('.mb-summary-close');
+  closeBtn.style.padding = '8px 12px';
+  closeBtn.style.background = 'transparent';
+  closeBtn.style.color = 'rgba(232, 234, 237, 0.7)';
   closeBtn.style.border = 'none';
-  closeBtn.style.borderRadius = '50%';
-  closeBtn.style.width = '32px';
-  closeBtn.style.height = '32px';
+  closeBtn.style.borderRadius = '8px';
+  closeBtn.style.width = 'auto';
+  closeBtn.style.height = 'auto';
   closeBtn.style.display = 'flex';
   closeBtn.style.alignItems = 'center';
   closeBtn.style.justifyContent = 'center';
   closeBtn.style.cursor = 'pointer';
-  closeBtn.style.transition = 'all 0.2s ease';
+  closeBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+  closeBtn.style.boxShadow = 'none';
   
   closeBtn.addEventListener('mouseenter', () => {
-    closeBtn.style.background = '#e8e8e8';
-    closeBtn.style.transform = 'scale(1.05)';
+    closeBtn.style.background = 'rgba(232, 234, 237, 0.1)';
+    closeBtn.style.color = '#E8EAED';
+    closeBtn.style.transform = 'translateY(-1px)';
   });
   
   closeBtn.addEventListener('mouseleave', () => {
-    closeBtn.style.background = '#ffffff';
-    closeBtn.style.transform = 'scale(1)';
+    closeBtn.style.background = 'transparent';
+    closeBtn.style.color = 'rgba(232, 234, 237, 0.7)';
+    closeBtn.style.transform = 'translateY(0)';
+  });
+  
+  // Style loading dots
+  const loadingDots = panel.querySelectorAll('.mailbot-loading-dot');
+  loadingDots.forEach(dot => {
+    dot.style.position = 'absolute';
+    dot.style.right = '10px';
+    dot.style.top = '50%';
+    dot.style.transform = 'translateY(-50%)';
+    dot.style.width = '8px';
+    dot.style.height = '8px';
+    dot.style.borderRadius = '50%';
+    dot.style.backgroundColor = '#5E97F6';
+    dot.style.boxShadow = '0 0 6px rgba(94, 151, 246, 0.45)';
+    dot.style.opacity = '0';
+    dot.style.pointerEvents = 'none';
+    dot.style.transition = 'opacity 0.2s ease';
   });
 }
 
@@ -2155,11 +2260,13 @@ function stylePreviewContainer(previewContainer) {
   previewContainer.style.zIndex = '9999999';
   previewContainer.style.display = 'none';
   previewContainer.style.flexDirection = 'column';
-  previewContainer.style.background = '#000000';
-  previewContainer.style.border = '1.5px solid #000000';
-  previewContainer.style.borderRadius = '16px';
-  previewContainer.style.padding = '16px 20px';
-  previewContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+  previewContainer.style.background = 'rgba(30, 31, 34, 0.95)';
+  previewContainer.style.backdropFilter = 'blur(12px) saturate(180%)';
+  previewContainer.style.webkitBackdropFilter = 'blur(12px) saturate(180%)';
+  previewContainer.style.border = '1.5px solid rgba(58, 59, 62, 0.6)';
+  previewContainer.style.borderRadius = '12px';
+  previewContainer.style.padding = '14px 16px';
+  previewContainer.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
   previewContainer.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
   previewContainer.style.minWidth = '500px';
   previewContainer.style.maxWidth = '700px';
@@ -2179,20 +2286,20 @@ function stylePreviewContainer(previewContainer) {
   const levelDiv = previewContainer.querySelector('.mb-preview-level');
   levelDiv.style.display = 'flex';
   levelDiv.style.gap = '4px';
-  levelDiv.style.background = '#1a1a1a';
+  levelDiv.style.background = 'rgba(42, 43, 46, 0.6)';
   levelDiv.style.padding = '4px';
   levelDiv.style.borderRadius = '12px';
   
   previewContainer.querySelectorAll('.mb-preview-level-btn').forEach(btn => {
     btn.style.padding = '6px 12px';
     btn.style.background = 'transparent';
-    btn.style.color = 'rgba(255, 255, 255, 0.6)';
+    btn.style.color = 'rgba(232, 234, 237, 0.7)';
     btn.style.border = 'none';
     btn.style.borderRadius = '8px';
     btn.style.cursor = 'pointer';
     btn.style.fontSize = '13px';
     btn.style.fontWeight = '500';
-    btn.style.transition = 'all 0.2s ease';
+    btn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
   });
   
   const activeLevel = previewContainer.querySelector('.mb-preview-level-active');
@@ -2205,20 +2312,20 @@ function stylePreviewContainer(previewContainer) {
   const toggleDiv = previewContainer.querySelector('.mb-preview-toggle');
   toggleDiv.style.display = 'flex';
   toggleDiv.style.gap = '4px';
-  toggleDiv.style.background = '#1a1a1a';
+  toggleDiv.style.background = 'rgba(42, 43, 46, 0.6)';
   toggleDiv.style.padding = '4px';
   toggleDiv.style.borderRadius = '12px';
   
   previewContainer.querySelectorAll('.mb-preview-toggle-btn').forEach(btn => {
     btn.style.padding = '6px 16px';
     btn.style.background = 'transparent';
-    btn.style.color = 'rgba(255, 255, 255, 0.6)';
+    btn.style.color = 'rgba(232, 234, 237, 0.7)';
     btn.style.border = 'none';
     btn.style.borderRadius = '8px';
     btn.style.cursor = 'pointer';
     btn.style.fontSize = '13px';
     btn.style.fontWeight = '500';
-    btn.style.transition = 'all 0.2s ease';
+    btn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
   });
   
   const activeToggle = previewContainer.querySelector('.mb-preview-toggle-active');
@@ -2229,24 +2336,25 @@ function stylePreviewContainer(previewContainer) {
   
   // Body
   const body = previewContainer.querySelector('.mb-preview-body');
-  body.style.padding = '12px';
-  body.style.background = '#1a1a1a';
-  body.style.border = '1.5px solid #333333';
-  body.style.borderRadius = '12px';
-  body.style.color = '#ffffff';
+  body.style.padding = '14px';
+  body.style.background = 'rgba(42, 43, 46, 0.6)';
+  body.style.border = '1.5px solid rgba(58, 59, 62, 0.6)';
+  body.style.borderRadius = '8px';
+  body.style.color = 'rgba(232, 234, 237, 0.95)';
   body.style.fontSize = '14px';
   body.style.lineHeight = '1.6';
   body.style.minHeight = '150px';
-  body.style.maxHeight = '400px';
+  body.style.maxHeight = '40vh';
   body.style.overflowY = 'auto';
   body.style.outline = 'none';
   body.style.whiteSpace = 'pre-wrap';
   body.style.wordWrap = 'break-word';
+  body.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
   
   // Metadata
   const meta = previewContainer.querySelector('.mb-preview-meta');
   meta.style.fontSize = '12px';
-  meta.style.color = 'rgba(255, 255, 255, 0.5)';
+  meta.style.color = 'rgba(232, 234, 237, 0.5)';
   meta.style.textAlign = 'center';
 }
 
@@ -2373,8 +2481,14 @@ function attachMailBotButton(editableField, type = 'dialog') {
     <label class="mailbot-label">What do you want to say?</label>
     <input type="text" class="mailbot-input" placeholder="Your thoughts..." />
     <div class="mailbot-controls">
-      <button class="mailbot-generate-btn">Generate</button>
-      <button class="mailbot-insert-btn">Insert</button>
+      <button class="mailbot-generate-btn">
+        Generate
+        <span class="mailbot-loading-dot"></span>
+      </button>
+      <button class="mailbot-insert-btn">
+        Insert
+        <span class="mailbot-loading-dot"></span>
+      </button>
       <button class="mailbot-collapse-btn" title="Collapse">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
           <path d="M10 2L4 8L10 14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
@@ -2416,60 +2530,62 @@ function attachMailBotButton(editableField, type = 'dialog') {
     btn.style.transition = 'all 0.2s ease';
     btn.style.opacity = '1';  // Initial opacity for fade transitions
     
-    // EXPANDED PANEL STYLING - Black theme to match MailBot button
+    // EXPANDED PANEL STYLING - Frosted glass design
     expandedPanel.style.display = 'none';
-    expandedPanel.style.background = '#000000';  // Black background
-    expandedPanel.style.border = '1.5px solid #000000';
-    expandedPanel.style.borderRadius = '16px';  // Match button's rounded rectangular shape
-    expandedPanel.style.padding = '10px 20px';  // Match button padding
-    expandedPanel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+    expandedPanel.style.background = 'rgba(30, 31, 34, 0.95)';
+    expandedPanel.style.backdropFilter = 'blur(12px) saturate(180%)';
+    expandedPanel.style.webkitBackdropFilter = 'blur(12px) saturate(180%)';
+    expandedPanel.style.border = '1.5px solid rgba(58, 59, 62, 0.6)';
+    expandedPanel.style.borderRadius = '12px';
+    expandedPanel.style.padding = '14px 16px';
+    expandedPanel.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
     expandedPanel.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
     expandedPanel.style.minWidth = '500px';
     expandedPanel.style.display = 'flex';
     expandedPanel.style.alignItems = 'center';
     expandedPanel.style.gap = '12px';
-    expandedPanel.style.cursor = 'grab';  // Show grab cursor for dragging
-    expandedPanel.style.display = 'none'; // Hidden initially
-    expandedPanel.style.opacity = '1';  // Initial opacity for fade transitions
+    expandedPanel.style.cursor = 'grab';
+    expandedPanel.style.display = 'none';
+    expandedPanel.style.opacity = '1';
     
-    // Style label - White text on black (also draggable)
+    // Style label - Muted text (also draggable)
     const label = expandedPanel.querySelector('.mailbot-label');
-    label.style.fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
-    label.style.fontSize = '14px';
-    label.style.fontWeight = '600';
-    label.style.color = 'rgba(255, 255, 255, 0.9)';
-    label.style.marginBottom = '6px';
+    label.style.fontFamily = "system-ui, -apple-system, 'Segoe UI', sans-serif";
+    label.style.fontSize = '13px';
+    label.style.fontWeight = '500';
+    label.style.color = 'rgba(232, 234, 237, 0.7)';
+    label.style.marginBottom = '0';
     label.style.whiteSpace = 'nowrap';
     label.style.marginRight = '8px';
-    label.style.cursor = 'grab';  // Label is draggable
-    label.style.padding = '0';  // Reset default label padding
-    label.style.lineHeight = 'normal';  // Reset line height
+    label.style.cursor = 'grab';
+    label.style.padding = '0';
+    label.style.lineHeight = '1.5';
+    label.style.letterSpacing = '0.01em';
     
-    // Style input - Dark with white text
+    // Style input - Frosted surface with visible border
     const input = expandedPanel.querySelector('.mailbot-input');
     input.style.flex = '1';
-    input.style.padding = '10px 16px';
-    input.style.background = '#1a1a1a';  // Dark gray background
-    input.style.color = '#ffffff';  // White text
-    input.style.border = '1.5px solid #333333';
-    input.style.borderRadius = '20px';  // Rounded rectangular
-    input.style.fontSize = '14px';
+    input.style.padding = '9px 14px';
+    input.style.background = '#2A2B2E';
+    input.style.color = '#E8EAED';
+    input.style.border = '1.5px solid #3A3B3E';
+    input.style.borderRadius = '10px';
+    input.style.fontSize = '13px';
     input.style.fontFamily = 'inherit';
     input.style.outline = 'none';
-    input.style.transition = 'all 0.2s ease';
-    input.style.cursor = 'text';  // Text cursor to indicate it's an input field
-    
-    // Placeholder styling
-    input.style.setProperty('::placeholder', 'color: rgba(255,255,255,0.5)');
+    input.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+    input.style.cursor = 'text';
     
     input.addEventListener('focus', () => {
-      input.style.background = '#2a2a2a';
-      input.style.borderColor = '#555555';
+      input.style.background = '#2A2B2E';
+      input.style.borderColor = '#5E97F6';
+      input.style.boxShadow = '0 0 0 2px rgba(94, 151, 246, 0.25)';
     });
     
     input.addEventListener('blur', () => {
-      input.style.background = '#1a1a1a';
-      input.style.borderColor = '#333333';
+      input.style.background = '#2A2B2E';
+      input.style.borderColor = '#3A3B3E';
+      input.style.boxShadow = 'none';
     });
     
     // Style controls container
@@ -2478,87 +2594,149 @@ function attachMailBotButton(editableField, type = 'dialog') {
     controls.style.gap = '8px';
     controls.style.alignItems = 'center';
     
-    // Style Generate button - White with black text for contrast
+    // Style Generate button - White primary button with loading dot
     const generateBtn = expandedPanel.querySelector('.mailbot-generate-btn');
-    generateBtn.style.padding = '10px 20px';
+    generateBtn.style.position = 'relative';
+    generateBtn.style.padding = '9px 32px 9px 18px';
     generateBtn.style.background = '#ffffff';
     generateBtn.style.color = '#000000';
-    generateBtn.style.border = '1.5px solid #ffffff';
-    generateBtn.style.borderRadius = '20px';  // Rounded rectangular
-    generateBtn.style.fontSize = '14px';
+    generateBtn.style.border = 'none';
+    generateBtn.style.borderRadius = '8px';
+    generateBtn.style.fontSize = '13px';
     generateBtn.style.fontWeight = '500';
     generateBtn.style.cursor = 'pointer';
-    generateBtn.style.transition = 'all 0.2s ease';
+    generateBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
     generateBtn.style.whiteSpace = 'nowrap';
-    generateBtn.style.letterSpacing = '0.3px';
+    generateBtn.style.letterSpacing = '0.01em';
+    generateBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+    generateBtn.style.minWidth = '88px';
     
     generateBtn.addEventListener('mouseenter', () => {
-      generateBtn.style.background = '#e8e8e8';
-      generateBtn.style.transform = 'scale(1.02)';
+      if (!generateBtn.disabled) {
+        generateBtn.style.background = '#f8f9fa';
+        generateBtn.style.transform = 'translateY(-1px)';
+        generateBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.25)';
+      }
     });
     
     generateBtn.addEventListener('mouseleave', () => {
       generateBtn.style.background = '#ffffff';
-      generateBtn.style.transform = 'scale(1)';
+      generateBtn.style.transform = 'translateY(0)';
+      generateBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
     });
     
-    // Style Insert button - White with black text (consistent)
+    // Style Insert button - Gray secondary button matching compose window
     const insertBtn = expandedPanel.querySelector('.mailbot-insert-btn');
-    insertBtn.style.padding = '10px 24px';
-    insertBtn.style.background = '#ffffff';
-    insertBtn.style.color = '#000000';
-    insertBtn.style.border = '1.5px solid #ffffff';
-    insertBtn.style.borderRadius = '20px';  // Rounded rectangular
-    insertBtn.style.fontSize = '14px';
+    insertBtn.style.position = 'relative';
+    insertBtn.style.padding = '9px 32px 9px 20px';
+    insertBtn.style.background = '#BDC1C6';
+    insertBtn.style.color = '#3C4043';
+    insertBtn.style.border = 'none';
+    insertBtn.style.borderRadius = '8px';
+    insertBtn.style.fontSize = '13px';
     insertBtn.style.fontWeight = '500';
     insertBtn.style.cursor = 'pointer';
-    insertBtn.style.transition = 'all 0.2s ease';
+    insertBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
     insertBtn.style.whiteSpace = 'nowrap';
-    insertBtn.style.letterSpacing = '0.3px';
+    insertBtn.style.letterSpacing = '0.01em';
+    insertBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+    insertBtn.style.minWidth = '88px';
     
     insertBtn.addEventListener('mouseenter', () => {
-      insertBtn.style.background = '#e8e8e8';
-      insertBtn.style.transform = 'scale(1.02)';
+      if (!insertBtn.disabled) {
+        insertBtn.style.background = '#A8ACB0';
+        insertBtn.style.transform = 'translateY(-1px)';
+        insertBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.25)';
+      }
     });
     
     insertBtn.addEventListener('mouseleave', () => {
-      insertBtn.style.background = '#ffffff';
-      insertBtn.style.transform = 'scale(1)';
+      insertBtn.style.background = '#BDC1C6';
+      insertBtn.style.transform = 'translateY(0)';
+      insertBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
     });
     
-    // Style collapse button (chevron) - White button with black icon
+    // Style disabled state for Insert button
+    insertBtn.disabled = true;
+    insertBtn.style.opacity = '0.6';
+    insertBtn.style.cursor = 'not-allowed';
+    
+    // Style collapse button (Back button) - Ghost black style
     const collapseBtn = expandedPanel.querySelector('.mailbot-collapse-btn');
-    collapseBtn.style.padding = '8px';
-    collapseBtn.style.background = '#ffffff';  // White background
-    collapseBtn.style.color = '#000000';  // Black icon
-    collapseBtn.style.border = '1.5px solid #ffffff';
-    collapseBtn.style.borderRadius = '50%';  // Circular
-    collapseBtn.style.width = '36px';
-    collapseBtn.style.height = '36px';
+    collapseBtn.style.padding = '8px 12px';
+    collapseBtn.style.background = 'transparent';
+    collapseBtn.style.color = 'rgba(232, 234, 237, 0.7)';
+    collapseBtn.style.border = 'none';
+    collapseBtn.style.borderRadius = '8px';
+    collapseBtn.style.width = 'auto';
+    collapseBtn.style.height = 'auto';
     collapseBtn.style.display = 'flex';
     collapseBtn.style.alignItems = 'center';
     collapseBtn.style.justifyContent = 'center';
     collapseBtn.style.cursor = 'pointer';
-    collapseBtn.style.transition = 'all 0.2s ease';
+    collapseBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+    collapseBtn.style.boxShadow = 'none';
     
     collapseBtn.addEventListener('mouseenter', () => {
-      collapseBtn.style.background = '#e8e8e8';  // Slightly dimmed white
-      collapseBtn.style.transform = 'scale(1.05)';
+      collapseBtn.style.background = 'rgba(232, 234, 237, 0.1)';
+      collapseBtn.style.color = '#E8EAED';
+      collapseBtn.style.transform = 'translateY(-1px)';
     });
     
     collapseBtn.addEventListener('mouseleave', () => {
-      collapseBtn.style.background = '#ffffff';  // Back to white
-      collapseBtn.style.transform = 'scale(1)';
+      collapseBtn.style.background = 'transparent';
+      collapseBtn.style.color = 'rgba(232, 234, 237, 0.7)';
+      collapseBtn.style.transform = 'translateY(0)';
     });
     
-    // Style preview container - Separate box below expanded panel
+    // Style loading dots for both Generate and Insert buttons
+    const loadingDots = expandedPanel.querySelectorAll('.mailbot-loading-dot');
+    loadingDots.forEach(dot => {
+      dot.style.position = 'absolute';
+      dot.style.right = '10px';
+      dot.style.top = '50%';
+      dot.style.transform = 'translateY(-50%)';
+      dot.style.width = '8px';
+      dot.style.height = '8px';
+      dot.style.borderRadius = '50%';
+      dot.style.backgroundColor = '#5E97F6';
+      dot.style.boxShadow = '0 0 6px rgba(94, 151, 246, 0.45)';
+      dot.style.opacity = '0';
+      dot.style.pointerEvents = 'none';
+      dot.style.transition = 'opacity 0.2s ease';
+    });
+    
+    // Add animation for loading dot pulsing
+    const styleEl = document.createElement('style');
+    styleEl.textContent = `
+      @keyframes mailbot-pulse {
+        0%, 100% {
+          transform: translateY(-50%) scale(1);
+          opacity: 0.6;
+        }
+        50% {
+          transform: translateY(-50%) scale(1.3);
+          opacity: 1;
+        }
+      }
+      .mailbot-generate-btn.loading .mailbot-loading-dot,
+      .mailbot-insert-btn.loading .mailbot-loading-dot {
+        opacity: 1 !important;
+        animation: mailbot-pulse 1.2s infinite;
+      }
+    `;
+    document.head.appendChild(styleEl);
+    
+    // Style preview container - Frosted glass separate box
     previewContainer.style.position = 'fixed';
     previewContainer.style.zIndex = '9999999';
-    previewContainer.style.background = '#000000';
-    previewContainer.style.border = '1.5px solid #000000';
-    previewContainer.style.borderRadius = '16px';
-    previewContainer.style.padding = '16px 20px';
-    previewContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+    previewContainer.style.background = 'rgba(30, 31, 34, 0.95)';
+    previewContainer.style.backdropFilter = 'blur(12px) saturate(180%)';
+    previewContainer.style.webkitBackdropFilter = 'blur(12px) saturate(180%)';
+    previewContainer.style.border = '1.5px solid rgba(58, 59, 62, 0.6)';
+    previewContainer.style.borderRadius = '12px';
+    previewContainer.style.padding = '14px 16px';
+    previewContainer.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
     previewContainer.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
     previewContainer.style.minWidth = '500px';
     previewContainer.style.maxWidth = '700px';
@@ -2703,10 +2881,11 @@ function attachMailBotButton(editableField, type = 'dialog') {
       
       console.log('[MailBot] Generate clicked with prompt:', userPrompt);
       
-      // Show loading state
-      generateBtn.textContent = 'Generating...';
+      // Show loading state with blue dot
+      generateBtn.classList.add('loading');
       generateBtn.disabled = true;
-      generateBtn.style.opacity = '0.6';
+      generateBtn.style.opacity = '0.7';
+      generateBtn.style.cursor = 'not-allowed';
       
       try {
         // Get thread context with enhanced metadata (pass editableField to detect reply position)
@@ -2882,10 +3061,11 @@ function attachMailBotButton(editableField, type = 'dialog') {
         console.error('[MailBot] ✗ Generation failed:', error);
         alert('Failed to generate reply:\n\n' + error.message);
       } finally {
-        // Reset button
-        generateBtn.textContent = 'Generate';
+        // Reset button state
+        generateBtn.classList.remove('loading');
         generateBtn.disabled = false;
         generateBtn.style.opacity = '1';
+        generateBtn.style.cursor = 'pointer';
       }
     });
     
@@ -3022,6 +3202,7 @@ function attachMailBotButton(editableField, type = 'dialog') {
       if (isCollapsed) {
         btn.style.cursor = 'grabbing';
         btn.style.transition = 'none';
+        btn.style.background = 'rgba(30, 31, 34, 0.95)'; // Maintain color during drag
       } else if (isSummarize) {
         const summarizePanel = container.querySelector('.mailbot-summarize-panel');
         if (summarizePanel) {
@@ -3030,11 +3211,13 @@ function attachMailBotButton(editableField, type = 'dialog') {
         }
         btn.style.cursor = 'grabbing';
         btn.style.transition = 'none';
+        btn.style.background = 'rgba(30, 31, 34, 0.95)'; // Maintain color during drag
       } else {
         expandedPanel.style.cursor = 'grabbing';
         expandedPanel.style.transition = 'none';
         btn.style.cursor = 'grabbing';
         btn.style.transition = 'none';
+        btn.style.background = 'rgba(30, 31, 34, 0.95)'; // Maintain color during drag
       }
       
       const rect = container.getBoundingClientRect();
@@ -3197,17 +3380,19 @@ function attachMailBotButton(editableField, type = 'dialog') {
     // Hover effect for inline (only when not dragging and collapsed)
     btn.addEventListener('mouseenter', () => {
       if (!isDragging && container.getAttribute('data-state') === 'collapsed') {
-        btn.style.background = '#1a1a1a';
-        btn.style.border = '1.5px solid #333333';
-        btn.style.transform = 'scale(1.02)';
+        btn.style.background = 'rgba(58, 59, 62, 0.95)';
+        btn.style.border = '1.5px solid rgba(78, 79, 82, 0.7)';
+        btn.style.transform = 'translateY(-1px)';
+        btn.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.5)';
       }
     });
     
     btn.addEventListener('mouseleave', () => {
       if (!isDragging && container.getAttribute('data-state') === 'collapsed') {
-        btn.style.background = '#000000';
-        btn.style.border = '1.5px solid #000000';
-        btn.style.transform = 'scale(1)';
+        btn.style.background = 'rgba(30, 31, 34, 0.95)';
+        btn.style.border = '1.5px solid rgba(58, 59, 62, 0.6)';
+        btn.style.transform = 'none';
+        btn.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
       }
     });
   } else {
