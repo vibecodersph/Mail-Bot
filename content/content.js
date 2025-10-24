@@ -4243,14 +4243,14 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
         const previewTopInViewport = panelRect.bottom + 8;
         const availableHeight = viewportHeight - previewTopInViewport - 20; // 20px bottom padding
         
-        // Get preview content element for height control
-        const previewContent = composePreview.querySelector('.mb-preview-content');
-        if (previewContent && availableHeight > 100) {
+        // Get preview card element for height control (contains both subject and body)
+        const previewCard = composePreview.querySelector('.preview-card');
+        if (previewCard && availableHeight > 100) {
           // Set max-height to fit within viewport
-          // Account for preview header (~40px), padding (~28px), and borders
-          const maxContentHeight = Math.max(150, Math.min(400, availableHeight - 70));
-          previewContent.style.maxHeight = `${maxContentHeight}px`;
-          previewContent.style.overflowY = 'auto';
+          // Account for preview header (~50px), padding, and borders
+          const maxCardHeight = Math.max(150, Math.min(availableHeight - 60, 40 * viewportHeight / 100));
+          previewCard.style.maxHeight = `${maxCardHeight}px`;
+          previewCard.style.overflowY = 'auto';
         }
       }
     }
