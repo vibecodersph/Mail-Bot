@@ -360,6 +360,28 @@ function findMessageMetadataForEditable(editableField) {
 }
 
 /**
+ * Detect if an editable field is for new compose (not a reply)
+ * @param {HTMLElement} editableField - The compose field element
+ * @returns {boolean} True if this is a new compose, false if it's a reply
+ */
+function isNewComposeField(editableField) {
+  const metadata = findMessageMetadataForEditable(editableField);
+  // If there's no thread index and no message ID, it's a new compose
+  return metadata.threadIndex === null && !metadata.messageId;
+}
+
+/**
+ * Detect if an editable field is for new compose (not a reply)
+ * @param {HTMLElement} editableField - The compose field element
+ * @returns {boolean} True if this is a new compose, false if it's a reply
+ */
+function isNewComposeField(editableField) {
+  const metadata = findMessageMetadataForEditable(editableField);
+  // If there's no thread index and no message ID, it's a new compose
+  return metadata.threadIndex === null && !metadata.messageId;
+}
+
+/**
  * Analyze conversation state to understand who's waiting for whom
  * @param {Array} emailThread - Array of email objects with from/to/content
  * @param {string} currentUserEmail - The logged-in user's email
@@ -965,6 +987,92 @@ function fixSignature(generatedEmail, userDisplayName, recipientEmail) {
 }
 
 /**
+ * Fix email formatting issues: separate greeting from body, fix spacing before closing
+ * @param {string} emailText - The generated email text
+ * @param {Array} preferredGreetings - User's preferred greetings
+ * @param {Array} preferredClosings - User's preferred closings
+ * @returns {string} Formatted email text
+ */
+function fixEmailFormatting(emailText, preferredGreetings = [], preferredClosings = []) {
+  let lines = emailText.split('\n');
+  
+  // Remove empty lines at the beginning and end
+  while (lines.length > 0 && lines[0].trim() === '') {
+    lines.shift();
+  }
+  while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+    lines.pop();
+  }
+  
+  if (lines.length === 0) return emailText;
+  
+  // Fix inline greetings: if first line contains greeting + body content, separate them
+  const firstLine = lines[0].trim();
+  const commonGreetings = ['Hi', 'Hello', 'Dear', 'Good morning', 'Good afternoon', 'Good evening', 'Greetings'].concat(preferredGreetings);
+  
+  for (const greeting of commonGreetings) {
+    const greetingPattern = new RegExp(`^${greeting}[\\s,]*([^,\\n]+)[,.]?\\s*(.+)`, 'i');
+    const match = firstLine.match(greetingPattern);
+    
+    if (match && match[2] && match[2].trim().length > 10) {
+      // Found inline greeting + body content, separate them
+      const greetingPart = match[0].substring(0, match[0].length - match[2].length).trim();
+      const bodyPart = match[2].trim();
+      
+      console.log('[MailBot] 📝 Separating inline greeting from body');
+      lines[0] = greetingPart;
+      lines.splice(1, 0, '', bodyPart);
+      break;
+    }
+  }
+  
+  // Fix excessive spacing before closing
+  const commonClosings = ['Sincerely', 'Best regards', 'Kind regards', 'Best', 'Regards', 'Thank you', 'Thanks'].concat(preferredClosings);
+  
+  // Find the last non-empty line that looks like a closing
+  let closingLineIndex = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (line) {
+      // Check if this line is a closing
+      const isClosing = commonClosings.some(closing => 
+        line.toLowerCase().includes(closing.toLowerCase()) || 
+        line.match(/^(Best|Regards|Sincerely|Thanks?|Cheers)[,.]?$/i)
+      );
+      
+      if (isClosing) {
+        closingLineIndex = i;
+        break;
+      }
+    }
+  }
+  
+  // If we found a closing, ensure there's only one empty line before it
+  if (closingLineIndex > 1) {
+    let emptyLinesBeforeClosing = 0;
+    let lastContentLineIndex = closingLineIndex - 1;
+    
+    // Count empty lines before closing
+    while (lastContentLineIndex >= 0 && lines[lastContentLineIndex].trim() === '') {
+      emptyLinesBeforeClosing++;
+      lastContentLineIndex--;
+    }
+    
+    // If there are more than 2 empty lines, reduce to 1
+    if (emptyLinesBeforeClosing > 2) {
+      console.log('[MailBot] 📝 Reducing excessive spacing before closing');
+      const linesToRemove = emptyLinesBeforeClosing - 1;
+      lines.splice(lastContentLineIndex + 1, linesToRemove);
+    } else if (emptyLinesBeforeClosing === 0) {
+      // If there's no space before closing, add one empty line
+      lines.splice(closingLineIndex, 0, '');
+    }
+  }
+  
+  return lines.join('\n');
+}
+
+/**
  * Detect the primary language used in the email thread
  * @param {Array} emails - Array of email objects with content
  * @returns {string} Language description for AI prompt
@@ -1045,22 +1153,37 @@ async function generateWithAI(threadContext, userIntent, tone, attemptNumber = 1
   
   const { conversationState } = threadContext;
   const userEmail = threadContext.currentUserEmail || 'you';
-  const recipientEmail = conversationState.recipientEmail || 'the recipient';
+  const recipientEmail = conversationState.recipientEmail || 'recipient@example.com';
   const userName = userEmail.split('@')[0];
   
   // Get recipient's display name from conversation state (from Gmail UI)
-  let recipientName = conversationState.recipientName || recipientEmail.split('@')[0];
+  let recipientName = conversationState.recipientName || (recipientEmail.includes('@') ? recipientEmail.split('@')[0] : 'recipient');
   
   // Normalize recipient name to handle concatenated multi-word names (e.g., "MariaJose" -> "Maria Jose")
   recipientName = normalizeDisplayName(recipientName);
   
+  // Extract only the first name for greetings
+  const recipientFirstName = recipientName.split(' ')[0];
+  
   // Load user settings from storage
-  const settings = await chrome.storage.local.get([
-    'fullName',
-    'preferredGreetings',
-    'preferredClosings',
-    'emailLength'
-  ]);
+  let settings = {
+    fullName: '',
+    preferredGreetings: '',
+    preferredClosings: '',
+    emailLength: 'average'
+  };
+  try {
+    if (chrome && chrome.storage && chrome.storage.local) {
+      settings = await chrome.storage.local.get([
+        'fullName',
+        'preferredGreetings',
+        'preferredClosings',
+        'emailLength'
+      ]);
+    }
+  } catch (error) {
+    console.warn('[MailBot] Could not access chrome.storage for settings:', error);
+  }
   
   // Use full name from settings, or fall back to detection
   let userDisplayName = settings.fullName || getUserDisplayName(userEmail);
@@ -1133,7 +1256,7 @@ This is attempt ${attemptNumber} - previous attempt had identity confusion. Be e
   const detectedLanguage = detectConversationLanguage(threadContext.emails);
   
   // Check if this is a brand new compose (no existing thread)
-  const isNewCompose = !threadContext.emails || threadContext.emails.length === 0;
+  const isNewCompose = !threadContext || !threadContext.emails || threadContext.emails.length === 0;
   
   // Build comprehensive prompt
   const prompt = `You are writing an email on behalf of ${userEmail}.
@@ -1151,10 +1274,10 @@ YOUR IDENTITY: ${userEmail}
 
 ${isNewCompose ? `RECIPIENT: Unknown (user will fill in)
 - Write the email body only
-- Use appropriate greeting (Hi, Hello, etc.)` : `RECIPIENT IDENTITY: ${recipientEmail}
-- Their name: ${recipientName}
+- Use ONLY the greetings specified in USER PREFERENCES section below` : `RECIPIENT IDENTITY: ${recipientEmail}
+- Their name: ${recipientName} (use first name only: ${recipientFirstName})
 - This is who you are writing TO
-- Address them in the email (or use "Hi", "Hello")
+- Address them in the email using the greetings specified in USER PREFERENCES
 - DO NOT address yourself (${userDisplayName})`}
 
 ═══════════════════════════════════════
@@ -1172,11 +1295,17 @@ ${isNewCompose ? `- Default to English unless user's intent specifies another la
 USER PREFERENCES
 ═══════════════════════════════════════
 GREETING OPTIONS (translate to ${detectedLanguage} if needed): ${greetings.join(', ')}
+- CRITICAL: You MUST choose EXACTLY ONE from this list. NO other greetings are allowed.
+- DO NOT use "Dear", "Hi there", or any greeting not in this list
 - If writing in ${detectedLanguage} and it's not English, translate these greetings appropriately
 - Choose a culturally appropriate greeting for ${detectedLanguage}
 - Examples: "Hi" → Spanish: "Hola", French: "Bonjour", German: "Hallo"
+${isNewCompose ? '- For new emails, use the greeting as-is since recipient is unknown' : `- ALWAYS include the recipient's FIRST NAME ONLY: "${recipientFirstName}" after the greeting
+- Format: "[Greeting] [RecipientFirstName]," (e.g., "Hi ${recipientFirstName}," or "Greetings ${recipientFirstName},")`}
 
 CLOSING OPTIONS (translate to ${detectedLanguage} if needed): ${closings.join(', ')}
+- CRITICAL: You MUST choose EXACTLY ONE from this list. NO other closings are allowed.
+- DO NOT use "Yours truly", "Cheers", or any closing not in this list
 - If writing in ${detectedLanguage} and it's not English, translate these closings appropriately
 - Choose a culturally appropriate closing for ${detectedLanguage}
 - Examples: "Best regards" → Spanish: "Saludos cordiales", French: "Cordialement", German: "Mit freundlichen Grüßen"
@@ -1210,7 +1339,7 @@ INSTRUCTIONS
 ═══════════════════════════════════════
 Write a ${toneInstructions[tone] || 'professional'} email that:
 
-1. ✓ Starts with an appropriate greeting: ${greetings.join(', ')}
+1. ✓ Starts with ONLY a greeting on its own line: ${greetings.join(', ')}
 2. ✓ Is from ${userEmail}'s perspective (use "I", "my", "me")
 ${isNewCompose ? '' : `3. ✓ Addresses ${recipientEmail} (not yourself)`}
 3. ✓ Accomplishes this intent: "${userIntent}"
@@ -1219,7 +1348,7 @@ ${isNewCompose ? '' : `5. ✓ Maintains appropriate context from the conversatio
 5. ✓ Length: ${isNewCompose ? '8-12 sentences with full context and details. Since this is a NEW email starting a conversation, provide comprehensive background, clear purpose, and sufficient elaboration' : lengthInstructions[emailLength]}
 6. ✓ Is ready to send (no placeholders like [insert X])
 7. ✓ Does NOT include "Subject:" or "Re:" lines (Gmail handles that)
-8. ✓ Ends with one of: ${closings.join(', ')}
+8. ✓ Ends with ONLY a closing on its own line: ${closings.join(', ')}
 9. ✓ DO NOT add your name or signature - the system will add it automatically
 ${conversationState.isFollowUp ? '11. ✓ Clearly indicates this is a follow-up' : ''}
 ${conversationState.respondingTo ? '11. ✓ Directly responds to their message' : ''}
@@ -1230,15 +1359,17 @@ CRITICAL REMINDERS:
 ❌ DO NOT include "Subject: Re: ..." in the email body
 ❌ DO NOT simply restate the user's intent - WRITE THE ACTUAL EMAIL
 ❌ DO NOT output instructions or meta-text - ONLY output the email content
-${isNewCompose ? '' : `❌ DO NOT sign with "${recipientName}" - that's the RECIPIENT, not you!
+${isNewCompose ? '' : `❌ DO NOT sign with "${recipientFirstName}" - that's the RECIPIENT, not you!
 ❌ DO NOT sign with "${recipientEmail}" - that's who you're writing TO!`}
 ❌ DO NOT use English greetings/closings if writing in ${detectedLanguage} (unless it's English)
+✓ DO start with greeting on separate line: choose ONE from ${greetings.join(', ')}
+✓ DO end with closing on separate line with ONE blank line before it: choose ONE from ${closings.join(', ')}
 ✓ DO write from ${userDisplayName}'s perspective using first-person
-${isNewCompose ? '' : `✓ DO address ${recipientName} or use general greetings`}
+${isNewCompose ? '' : `✓ DO address ${recipientFirstName} (first name only) or use general greetings`}
 ✓ DO translate greetings to ${detectedLanguage}: ${greetings.join(', ')} → use appropriate ${detectedLanguage} equivalents
 ✓ DO translate closings to ${detectedLanguage}: ${closings.join(', ')} → use appropriate ${detectedLanguage} equivalents
 ✓ DO end with ONLY the closing word (e.g., "Regards," or "Best,") - NO NAME
-${isNewCompose ? '' : `✓ YOU ARE ${userDisplayName}, NOT ${recipientName}`}
+${isNewCompose ? '' : `✓ YOU ARE ${userDisplayName}, NOT ${recipientFirstName}`}
 ✓ EVERYTHING must be in ${detectedLanguage} - greetings, body, AND closings
 ✓ WRITE THE ACTUAL EMAIL - not meta-commentary about writing it
 
@@ -1271,6 +1402,9 @@ OUTPUT THE COMPLETE EMAIL NOW (from ${userEmail}${isNewCompose ? '' : ` to ${rec
   
   // Apply signature fix (fallback post-processing)
   result = fixSignature(result, userDisplayName, recipientEmail);
+  
+  // Apply email formatting fixes
+  result = fixEmailFormatting(result, greetings, closings);
   
   // Validate the generated email
   const validation = validateGeneratedEmail(
@@ -1437,8 +1571,26 @@ function showIntentModal(editableField, boxType) {
     toneSelect.disabled = true;
     loadingDiv.style.display = 'block';
 
-    // Extract email context (pass editableField to detect reply position)
-    const threadContext = extractThreadContext(editableField);
+    // Determine if this is a new compose or reply
+    const isNewCompose = isNewComposeField(editableField);
+    
+    // Only extract thread context for replies, not for new compose
+    const threadContext = isNewCompose ? {
+      emails: [],
+      subject: '',
+      currentUserEmail: getCurrentUserEmail(),
+      messageCount: 0,
+      fullThread: '',
+      conversationState: {
+        lastSenderWasUser: false,
+        isFollowUp: false,
+        waitingForResponse: false,
+        respondingTo: null,
+        conversationStarter: true,
+        recipientEmail: null,
+        recipientName: null
+      }
+    } : extractThreadContext(editableField);
     
     // Send message to background for AI generation
     try {
@@ -2072,8 +2224,26 @@ function attachSummarizePanelListeners(panel, editableField) {
     generateBtn.style.cursor = 'not-allowed';
     
     try {
-      // Extract thread context
-      const threadContext = extractThreadContext(editableField);
+      // Determine if this is a new compose or reply
+      const isNewCompose = isNewComposeField(editableField);
+      
+      // Only extract thread context for replies (summarize doesn't make sense for new compose)
+      const threadContext = isNewCompose ? {
+        emails: [],
+        subject: '',
+        currentUserEmail: getCurrentUserEmail(),
+        messageCount: 0,
+        fullThread: '',
+        conversationState: {
+          lastSenderWasUser: false,
+          isFollowUp: false,
+          waitingForResponse: false,
+          respondingTo: null,
+          conversationStarter: true,
+          recipientEmail: null,
+          recipientName: null
+        }
+      } : extractThreadContext(editableField);
       
       if (!threadContext.emails || threadContext.emails.length === 0) {
         throw new Error('No email messages found in thread');
@@ -2602,7 +2772,10 @@ function attachMailBotButton(editableField, type = 'dialog') {
   previewContainer.innerHTML = `
     <div class="mailbot-preview-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
       <span style="font-size: 13px; font-weight: 500; color: #ffffff; opacity: 0.8;">Preview (click to edit):</span>
-      <button class="mailbot-regenerate-btn" style="padding: 4px 12px; background: #333; color: #fff; border: 1px solid #555; border-radius: 12px; font-size: 12px; cursor: pointer;">Regenerate</button>
+      <button class="mailbot-regenerate-btn mb-action-btn" style="padding: 8px 16px; background: #333333; color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease;">
+        Regenerate
+        <span class="mailbot-loading-dot" aria-hidden="true"></span>
+      </button>
     </div>
     <div class="mailbot-preview-content" contenteditable="true"></div>
   `;
@@ -2844,9 +3017,37 @@ function attachMailBotButton(editableField, type = 'dialog') {
         }
       }
       .mailbot-generate-btn.loading .mailbot-loading-dot,
-      .mailbot-insert-btn.loading .mailbot-loading-dot {
+      .mailbot-insert-btn.loading .mailbot-loading-dot,
+      .mailbot-regenerate-btn.loading .mailbot-loading-dot {
         opacity: 1 !important;
         animation: mailbot-pulse 1.2s infinite;
+      }
+      .mailbot-regenerate-btn .mailbot-loading-dot {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: #5E97F6;
+        box-shadow: 0 0 6px rgba(94, 151, 246, 0.45);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+        flex-shrink: 0;
+      }
+      .mailbot-regenerate-btn {
+        position: relative;
+        padding-right: 28px !important;
+      }
+      .mailbot-regenerate-btn:hover {
+        background: #404040 !important;
+        border-color: rgba(255, 255, 255, 0.25) !important;
+      }
+      .mailbot-regenerate-btn.loading {
+        opacity: 0.8;
+        cursor: not-allowed;
       }
     `;
     document.head.appendChild(styleEl);
@@ -3014,12 +3215,38 @@ function attachMailBotButton(editableField, type = 'dialog') {
       generateBtn.style.cursor = 'not-allowed';
       
       try {
-        // Get thread context with enhanced metadata (pass editableField to detect reply position)
-        const threadContext = extractThreadContext(editableField);
+        // Determine if this is a new compose or reply
+        const isNewCompose = isNewComposeField(editableField);
         
-        // Get default tone from storage
-        const { defaultTone } = await chrome.storage.local.get(['defaultTone']);
-        const tone = defaultTone || 'neutral';
+        // Only extract thread context for replies, not for new compose
+        const threadContext = isNewCompose ? {
+          emails: [],
+          subject: '',
+          currentUserEmail: getCurrentUserEmail(),
+          messageCount: 0,
+          fullThread: '',
+          conversationState: {
+            lastSenderWasUser: false,
+            isFollowUp: false,
+            waitingForResponse: false,
+            respondingTo: null,
+            conversationStarter: true,
+            recipientEmail: null,
+            recipientName: null
+          }
+        } : extractThreadContext(editableField);
+        
+        // Get default tone from storage with fallback
+        let defaultTone = 'neutral';
+        try {
+          if (chrome && chrome.storage && chrome.storage.local) {
+            const result = await chrome.storage.local.get(['defaultTone']);
+            defaultTone = result.defaultTone || 'neutral';
+          }
+        } catch (error) {
+          console.warn('[MailBot] Could not access chrome.storage for tone:', error);
+        }
+        const tone = defaultTone;
         
         // Call AI directly in content script with enhanced context
         console.log('[MailBot] Calling AI with enhanced context...');
@@ -3078,7 +3305,14 @@ function attachMailBotButton(editableField, type = 'dialog') {
         console.log('[MailBot] ✓ Reply generated successfully (attempt ' + result.attemptNumber + ')');
         
         // Add signature to generated text
-        const settings = await chrome.storage.local.get(['fullName', 'title', 'contactNumber']);
+        let settings = { fullName: '', title: '', contactNumber: '' };
+        try {
+          if (chrome && chrome.storage && chrome.storage.local) {
+            settings = await chrome.storage.local.get(['fullName', 'title', 'contactNumber']);
+          }
+        } catch (error) {
+          console.warn('[MailBot] Could not access chrome.storage for signature:', error);
+        }
         console.log('[MailBot] Signature settings:', settings);
         
         const signatureParts = [];
@@ -3236,9 +3470,128 @@ function attachMailBotButton(editableField, type = 'dialog') {
     
     // Regenerate button click
     const regenerateBtn = previewContainer.querySelector('.mailbot-regenerate-btn');
-    regenerateBtn.addEventListener('click', (e) => {
+    regenerateBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      generateBtn.click(); // Trigger generate again
+      e.preventDefault();
+      
+      const userPrompt = input.value.trim();
+      if (!userPrompt) {
+        input.focus();
+        input.style.borderColor = '#ea4335';
+        setTimeout(() => { input.style.borderColor = '#333333'; }, 1000);
+        return;
+      }
+      
+      console.log('[MailBot] Regenerate clicked with prompt:', userPrompt);
+      
+      // Show loading state on regenerate button
+      regenerateBtn.classList.add('loading');
+      regenerateBtn.disabled = true;
+      regenerateBtn.style.opacity = '0.8';
+      regenerateBtn.style.cursor = 'not-allowed';
+      
+      try {
+        // Determine if this is a new compose or reply
+        const isNewCompose = isNewComposeField(editableField);
+        
+        // Only extract thread context for replies, not for new compose
+        const threadContext = isNewCompose ? {
+          emails: [],
+          subject: '',
+          currentUserEmail: getCurrentUserEmail(),
+          messageCount: 0,
+          fullThread: '',
+          conversationState: {
+            lastSenderWasUser: false,
+            isFollowUp: false,
+            waitingForResponse: false,
+            respondingTo: null,
+            conversationStarter: true,
+            recipientEmail: null,
+            recipientName: null
+          }
+        } : extractThreadContext(editableField);
+        
+        // Get tone from extension storage with fallback
+        let tone = 'neutral';
+        try {
+          if (chrome && chrome.storage && chrome.storage.local) {
+            const result = await chrome.storage.local.get(['defaultTone']);
+            tone = result.defaultTone || 'neutral';
+          }
+        } catch (error) {
+          console.warn('[MailBot] Could not access chrome.storage, using default tone:', error);
+        }
+        
+        const result = await generateWithAI(threadContext, userPrompt, tone);
+        
+        // Add signature if configured
+        let settings = { fullName: '', title: '', contactNumber: '' };
+        try {
+          if (chrome && chrome.storage && chrome.storage.local) {
+            settings = await chrome.storage.local.get(['fullName', 'title', 'contactNumber']);
+          }
+        } catch (error) {
+          console.warn('[MailBot] Could not access chrome.storage for signature:', error);
+        }
+        const signatureParts = [];
+        if (settings.fullName && settings.fullName.trim()) {
+          signatureParts.push(settings.fullName.trim());
+        }
+        if (settings.title && settings.title.trim()) {
+          signatureParts.push(settings.title.trim());
+        }
+        if (settings.contactNumber && settings.contactNumber.trim()) {
+          signatureParts.push(settings.contactNumber.trim());
+        }
+        
+        let finalText = result.text;
+        
+        // Add signature if configured
+        if (signatureParts.length > 0 && settings.fullName) {
+          const signature = signatureParts.join('\n');
+          const lines = result.text.trim().split('\n');
+          const nameParts = settings.fullName.toLowerCase().split(/\s+/);
+          
+          // Check if AI already added name in closing
+          const lastFewLines = lines.slice(-3).join('\n').toLowerCase();
+          const hasName = nameParts.some(part => part.length > 2 && lastFewLines.includes(part));
+          
+          if (hasName) {
+            // Remove AI's name and add full signature
+            const filteredLines = lines.filter((line, index) => {
+              if (index < lines.length - 3) return true;
+              const lineLower = line.toLowerCase().trim();
+              return !nameParts.some(part => part.length > 2 && lineLower.includes(part));
+            });
+            finalText = `${filteredLines.join('\n')}\n\n${signature}`;
+          } else {
+            finalText = `${result.text}\n\n${signature}`;
+          }
+        }
+        
+        generatedText = finalText;
+        previewContent.textContent = finalText;
+        
+        console.log('[MailBot] ✓ Email regenerated successfully');
+        
+        // Reset regenerate button state
+        regenerateBtn.classList.remove('loading');
+        regenerateBtn.disabled = false;
+        regenerateBtn.style.opacity = '1';
+        regenerateBtn.style.cursor = 'pointer';
+        
+      } catch (error) {
+        console.error('[MailBot] Regeneration error:', error);
+        
+        // Reset regenerate button state
+        regenerateBtn.classList.remove('loading');
+        regenerateBtn.disabled = false;
+        regenerateBtn.style.opacity = '1';
+        regenerateBtn.style.cursor = 'pointer';
+        
+        alert('Failed to regenerate: ' + error.message);
+      }
     });
     
     // Enter key in input field = Generate
@@ -3565,18 +3918,42 @@ function attachMailBotButton(editableField, type = 'dialog') {
       e.stopPropagation();
       e.preventDefault();
 
-      // Extract thread context (pass editableField to detect reply position)
-      const threadContext = extractThreadContext(editableField);
+      // Determine if this is a new compose or reply
+      const isNewCompose = isNewComposeField(editableField);
+      
+      // Only extract thread context for replies, not for new compose
+      const threadContext = isNewCompose ? {
+        emails: [],
+        subject: '',
+        currentUserEmail: getCurrentUserEmail(),
+        messageCount: 0,
+        fullThread: '',
+        conversationState: {
+          lastSenderWasUser: false,
+          isFollowUp: false,
+          waitingForResponse: false,
+          respondingTo: null,
+          conversationStarter: true,
+          recipientEmail: null,
+          recipientName: null
+        }
+      } : extractThreadContext(editableField);
       
       // Send message to background with context
-      chrome.runtime.sendMessage({ 
-        type: 'MAILBOT_BUTTON_CLICKED',
-        context: {
-          boxType: type,
-          thread: threadContext,
-          timestamp: Date.now()
+      try {
+        if (chrome && chrome.runtime && chrome.runtime.sendMessage) {
+          chrome.runtime.sendMessage({ 
+            type: 'MAILBOT_BUTTON_CLICKED',
+            context: {
+              boxType: type,
+              thread: threadContext,
+              timestamp: Date.now()
+            }
+          });
         }
-      });
+      } catch (error) {
+        console.warn('[MailBot] Could not send message to background:', error);
+      }
       
       console.log(`[MailBot] Button clicked on ${type} compose box`, threadContext);
       // TODO: Open inline UI for tone selection
@@ -4381,12 +4758,35 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
       
       console.log('[MailBot Compose] Generating draft for intent:', intent);
       
-      // Call AI generation
-      const threadContext = extractThreadContext(editableField);
+      // For new compose, use empty thread context (no existing conversation)
+      const threadContext = {
+        emails: [],
+        subject: '',
+        currentUserEmail: getCurrentUserEmail(),
+        messageCount: 0,
+        fullThread: '',
+        conversationState: {
+          lastSenderWasUser: false,
+          isFollowUp: false,
+          waitingForResponse: false,
+          respondingTo: null,
+          conversationStarter: true,
+          recipientEmail: null,
+          recipientName: null
+        }
+      };
       
-      // Get default tone from storage
-      const { defaultTone } = await chrome.storage.local.get(['defaultTone']);
-      const tone = defaultTone || 'neutral';
+      // Get default tone from storage with fallback
+      let defaultTone = 'neutral';
+      try {
+        if (chrome && chrome.storage && chrome.storage.local) {
+          const result = await chrome.storage.local.get(['defaultTone']);
+          defaultTone = result.defaultTone || 'neutral';
+        }
+      } catch (error) {
+        console.warn('[MailBot] Could not access chrome.storage, using default tone:', error);
+      }
+      const tone = defaultTone;
       
       console.log('[MailBot Compose] Calling AI with context...');
       let result = await generateWithAI(
@@ -4410,7 +4810,14 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
       console.log('[MailBot Compose] AI generation complete');
       
       // Add signature if configured
-      const settings = await chrome.storage.local.get(['fullName', 'title', 'contactNumber']);
+      let settings = { fullName: '', title: '', contactNumber: '' };
+      try {
+        if (chrome && chrome.storage && chrome.storage.local) {
+          settings = await chrome.storage.local.get(['fullName', 'title', 'contactNumber']);
+        }
+      } catch (error) {
+        console.warn('[MailBot] Could not access chrome.storage for signature:', error);
+      }
       const signatureParts = [];
       if (settings.fullName && settings.fullName.trim()) {
         signatureParts.push(settings.fullName.trim());
