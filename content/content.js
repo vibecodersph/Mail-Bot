@@ -746,6 +746,9 @@ function validateGeneratedEmail(generatedEmail, currentUserEmail, recipientEmail
   const userName = currentUserEmail?.split('@')[0]?.toLowerCase() || '';
   const recipientName = recipientEmail?.split('@')[0]?.toLowerCase() || '';
   const emailLower = generatedEmail.toLowerCase();
+  // Lines split and last few lines used by several checks (signature detection, closing checks)
+  const emailLines = generatedEmail.trim().split('\n');
+  const lastFewLines = emailLines.slice(-4).join('\n').toLowerCase();
   
   // Check if AI is addressing the user instead of recipient
   if (userName && (
@@ -762,7 +765,24 @@ function validateGeneratedEmail(generatedEmail, currentUserEmail, recipientEmail
   }
   
   // Check if email contains first-person perspective (good sign)
-  const hasFirstPerson = /\b(i|i'm|i'll|my|me)\b/i.test(generatedEmail);
+  // Broaden detection to cover common contractions and plural forms, and
+  // treat a detected signature with the user's name as evidence of sender perspective.
+  const firstPersonRegex = /\b(i|i'm|i've|i\'ve|i'd|i\'d|i'll|i\'ll|i will|my|mine|me|we|we're|we've|we\'ve|we'll|our|us)\b/i;
+  let hasFirstPerson = firstPersonRegex.test(emailLower);
+
+  // If the signature area contains the user's username, assume it's from the user
+  // and suppress the first-person warning (avoids false positives when signature present).
+  try {
+    const userNameLower = (userName || '').toLowerCase();
+    if (!hasFirstPerson && userNameLower && lastFewLines && lastFewLines.includes(userNameLower)) {
+      hasFirstPerson = true;
+      console.log('[MailBot] ℹ️ Signature detected; skipping first-person perspective warning');
+    }
+  } catch (e) {
+    // Defensive: if anything goes wrong here, don't block validation flow
+    console.debug('[MailBot] debug: signature-check failed', e);
+  }
+
   if (!hasFirstPerson && generatedEmail.length > 50) {
     issues.push('WARNING: Email may not be written from your perspective (missing "I", "my", etc.)');
   }
@@ -800,10 +820,6 @@ function validateGeneratedEmail(generatedEmail, currentUserEmail, recipientEmail
   if (emailLower.includes('[insert') || emailLower.includes('[your ') || emailLower.includes('[add ')) {
     issues.push('ERROR: Email contains placeholder text like [insert X]');
   }
-  
-  // Check if AI is signing with recipient's name instead of sender's name
-  const emailLines = generatedEmail.trim().split('\n');
-  const lastFewLines = emailLines.slice(-4).join('\n').toLowerCase();
   
   // Check for recipient name in signature area (last few lines)
   if (recipientName && lastFewLines.includes(recipientName.toLowerCase())) {
@@ -1204,13 +1220,7 @@ ${isNewCompose ? '' : `5. ✓ Maintains appropriate context from the conversatio
 6. ✓ Is ready to send (no placeholders like [insert X])
 7. ✓ Does NOT include "Subject:" or "Re:" lines (Gmail handles that)
 8. ✓ Ends with one of: ${closings.join(', ')}
-9. ✓ Signs as "${userDisplayName}"${isNewCompose ? '' : ` NOT "${recipientName}"`}
-10. ✓ FORMAT CLOSING PROPERLY: Put closing on its own line, then name on next line
-    Example:
-    Regards,
-    ${userDisplayName}
-    
-    NOT: Regards, ${userDisplayName}
+9. ✓ DO NOT add your name or signature - the system will add it automatically
 ${conversationState.isFollowUp ? '11. ✓ Clearly indicates this is a follow-up' : ''}
 ${conversationState.respondingTo ? '11. ✓ Directly responds to their message' : ''}
 
@@ -1227,7 +1237,7 @@ ${isNewCompose ? '' : `❌ DO NOT sign with "${recipientName}" - that's the RECI
 ${isNewCompose ? '' : `✓ DO address ${recipientName} or use general greetings`}
 ✓ DO translate greetings to ${detectedLanguage}: ${greetings.join(', ')} → use appropriate ${detectedLanguage} equivalents
 ✓ DO translate closings to ${detectedLanguage}: ${closings.join(', ')} → use appropriate ${detectedLanguage} equivalents
-✓ DO sign with "${userDisplayName}" or just your first name
+✓ DO end with ONLY the closing word (e.g., "Regards," or "Best,") - NO NAME
 ${isNewCompose ? '' : `✓ YOU ARE ${userDisplayName}, NOT ${recipientName}`}
 ✓ EVERYTHING must be in ${detectedLanguage} - greetings, body, AND closings
 ✓ WRITE THE ACTUAL EMAIL - not meta-commentary about writing it
@@ -1952,6 +1962,30 @@ function styleSummarizePanel(panel) {
     dot.style.pointerEvents = 'none';
     dot.style.transition = 'opacity 0.2s ease';
   });
+  
+  // Add animation for loading dot pulsing (only add once)
+  if (!document.getElementById('mailbot-summarize-pulse-animation')) {
+    const styleEl = document.createElement('style');
+    styleEl.id = 'mailbot-summarize-pulse-animation';
+    styleEl.textContent = `
+      @keyframes mailbot-summarize-pulse {
+        0%, 100% {
+          transform: translateY(-50%) scale(1);
+          opacity: 0.6;
+        }
+        50% {
+          transform: translateY(-50%) scale(1.3);
+          opacity: 1;
+        }
+      }
+      .mb-summary-generate.loading .mailbot-loading-dot,
+      .mb-summary-copy.loading .mailbot-loading-dot {
+        opacity: 1 !important;
+        animation: mailbot-summarize-pulse 1.2s infinite;
+      }
+    `;
+    document.head.appendChild(styleEl);
+  }
 }
 
 /**
@@ -2031,10 +2065,11 @@ function attachSummarizePanelListeners(panel, editableField) {
   generateBtn.addEventListener('click', async () => {
     console.log('[MailBot] Generate Summary clicked');
     
-    // Show loading state
-    generateBtn.textContent = 'Generating...';
+    // Show loading state with loading dot
+    generateBtn.classList.add('loading');
     generateBtn.disabled = true;
-    generateBtn.style.opacity = '0.6';
+    generateBtn.style.opacity = '0.7';
+    generateBtn.style.cursor = 'not-allowed';
     
     try {
       // Extract thread context
@@ -2265,10 +2300,11 @@ ACTION ITEMS:`;
       console.error('[MailBot] ✗ Summary generation failed:', error);
       alert('Failed to generate summary:\\n\\n' + error.message);
     } finally {
-      // Reset button
-      generateBtn.textContent = 'Generate';
+      // Reset button state
+      generateBtn.classList.remove('loading');
       generateBtn.disabled = false;
       generateBtn.style.opacity = '1';
+      generateBtn.style.cursor = 'pointer';
     }
   });
 }
