@@ -1116,10 +1116,13 @@ This is attempt ${attemptNumber} - previous attempt had identity confusion. Be e
   // Detect conversation language
   const detectedLanguage = detectConversationLanguage(threadContext.emails);
   
+  // Check if this is a brand new compose (no existing thread)
+  const isNewCompose = !threadContext.emails || threadContext.emails.length === 0;
+  
   // Build comprehensive prompt
   const prompt = `You are writing an email on behalf of ${userEmail}.
 Your name is: ${userDisplayName}
-You are ${userDisplayName} writing to ${recipientName}.
+${isNewCompose ? `You are writing a NEW email.` : `You are ${userDisplayName} writing to ${recipientName}.`}
 
 ═══════════════════════════════════════
 IDENTITY DECLARATION
@@ -1130,11 +1133,13 @@ YOUR IDENTITY: ${userEmail}
 - You are the SENDER of this email
 - Write from first-person perspective (I, me, my)
 
-RECIPIENT IDENTITY: ${recipientEmail}
+${isNewCompose ? `RECIPIENT: Unknown (user will fill in)
+- Write the email body only
+- Use appropriate greeting (Hi, Hello, etc.)` : `RECIPIENT IDENTITY: ${recipientEmail}
 - Their name: ${recipientName}
 - This is who you are writing TO
 - Address them in the email (or use "Hi", "Hello")
-- DO NOT address yourself (${userDisplayName})
+- DO NOT address yourself (${userDisplayName})`}
 
 ═══════════════════════════════════════
 LANGUAGE REQUIREMENT
@@ -1142,7 +1147,7 @@ LANGUAGE REQUIREMENT
 DETECTED CONVERSATION LANGUAGE: ${detectedLanguage}
 
 ⚠️ CRITICAL: Write your ENTIRE response in ${detectedLanguage}.
-- Match the language used in the conversation history below
+${isNewCompose ? `- Default to English unless user's intent specifies another language` : `- Match the language used in the conversation history below`}
 - If the user specifies a different language in their intent, use that instead
 - Otherwise, ALWAYS use ${detectedLanguage} to maintain conversation consistency
 - Translate ALL parts of the email including greetings, body, and closings to ${detectedLanguage}
@@ -1164,20 +1169,20 @@ CLOSING OPTIONS (translate to ${detectedLanguage} if needed): ${closings.join(',
 EMAIL LENGTH: ${lengthInstructions[emailLength]}
 
 ═══════════════════════════════════════
-CONVERSATION HISTORY
+${isNewCompose ? 'NEW EMAIL (No existing conversation)' : 'CONVERSATION HISTORY'}
 ═══════════════════════════════════════
-SUBJECT: ${threadContext.subject}
+${isNewCompose ? 'This is a brand new email. No previous thread exists.' : `SUBJECT: ${threadContext.subject}
 
-${conversationHistory}
+${conversationHistory}`}
 
-═══════════════════════════════════════
+${isNewCompose ? '' : `═══════════════════════════════════════
 CURRENT SITUATION
 ═══════════════════════════════════════
 ${situationAnalysis}
 
 - Thread length: ${conversationState.threadLength} message(s)
 - Last sender: ${conversationState.lastSenderWasUser ? `YOU (${userEmail})` : conversationState.respondingTo || 'Other party'}
-- Message type: ${conversationState.isFollowUp ? 'Follow-up' : conversationState.respondingTo ? 'Response' : 'New message'}
+- Message type: ${conversationState.isFollowUp ? 'Follow-up' : conversationState.respondingTo ? 'Response' : 'New message'}`}
 
 ═══════════════════════════════════════
 USER'S INTENT
@@ -1189,43 +1194,46 @@ INSTRUCTIONS
 ═══════════════════════════════════════
 Write a ${toneInstructions[tone] || 'professional'} email that:
 
-1. ✓ Starts with one of: ${greetings.join(', ')}
+1. ✓ Starts with an appropriate greeting: ${greetings.join(', ')}
 2. ✓ Is from ${userEmail}'s perspective (use "I", "my", "me")
-3. ✓ Addresses ${recipientEmail} (not yourself)
-4. ✓ Accomplishes this intent: "${userIntent}"
-5. ✓ Maintains appropriate context from the conversation
-6. ✓ Uses a ${tone} tone
-7. ✓ Length: ${lengthInstructions[emailLength]}
-8. ✓ Is ready to send (no placeholders like [insert X])
-9. ✓ Does NOT include "Subject:" or "Re:" lines (Gmail handles that)
-10. ✓ Ends with one of: ${closings.join(', ')}
-11. ✓ Signs as "${userDisplayName}" NOT "${recipientName}"
-12. ✓ FORMAT CLOSING PROPERLY: Put closing on its own line, then name on next line
+${isNewCompose ? '' : `3. ✓ Addresses ${recipientEmail} (not yourself)`}
+3. ✓ Accomplishes this intent: "${userIntent}"
+${isNewCompose ? '' : `5. ✓ Maintains appropriate context from the conversation`}
+4. ✓ Uses a ${tone} tone
+5. ✓ Length: ${isNewCompose ? '8-12 sentences with full context and details. Since this is a NEW email starting a conversation, provide comprehensive background, clear purpose, and sufficient elaboration' : lengthInstructions[emailLength]}
+6. ✓ Is ready to send (no placeholders like [insert X])
+7. ✓ Does NOT include "Subject:" or "Re:" lines (Gmail handles that)
+8. ✓ Ends with one of: ${closings.join(', ')}
+9. ✓ Signs as "${userDisplayName}"${isNewCompose ? '' : ` NOT "${recipientName}"`}
+10. ✓ FORMAT CLOSING PROPERLY: Put closing on its own line, then name on next line
     Example:
     Regards,
     ${userDisplayName}
     
     NOT: Regards, ${userDisplayName}
-${conversationState.isFollowUp ? '13. ✓ Clearly indicates this is a follow-up' : ''}
-${conversationState.respondingTo ? '13. ✓ Directly responds to their message' : ''}
+${conversationState.isFollowUp ? '11. ✓ Clearly indicates this is a follow-up' : ''}
+${conversationState.respondingTo ? '11. ✓ Directly responds to their message' : ''}
 
 CRITICAL REMINDERS:
 ❌ DO NOT write "Dear ${userDisplayName}" or "Hi ${userDisplayName}" - that's you!
 ❌ DO NOT write about ${userDisplayName} in third person - use "I"
 ❌ DO NOT include "Subject: Re: ..." in the email body
-❌ DO NOT sign with "${recipientName}" - that's the RECIPIENT, not you!
-❌ DO NOT sign with "${recipientEmail}" - that's who you're writing TO!
+❌ DO NOT simply restate the user's intent - WRITE THE ACTUAL EMAIL
+❌ DO NOT output instructions or meta-text - ONLY output the email content
+${isNewCompose ? '' : `❌ DO NOT sign with "${recipientName}" - that's the RECIPIENT, not you!
+❌ DO NOT sign with "${recipientEmail}" - that's who you're writing TO!`}
 ❌ DO NOT use English greetings/closings if writing in ${detectedLanguage} (unless it's English)
 ✓ DO write from ${userDisplayName}'s perspective using first-person
-✓ DO address ${recipientName} or use general greetings
+${isNewCompose ? '' : `✓ DO address ${recipientName} or use general greetings`}
 ✓ DO translate greetings to ${detectedLanguage}: ${greetings.join(', ')} → use appropriate ${detectedLanguage} equivalents
 ✓ DO translate closings to ${detectedLanguage}: ${closings.join(', ')} → use appropriate ${detectedLanguage} equivalents
 ✓ DO sign with "${userDisplayName}" or just your first name
-✓ YOU ARE ${userDisplayName}, NOT ${recipientName}
+${isNewCompose ? '' : `✓ YOU ARE ${userDisplayName}, NOT ${recipientName}`}
 ✓ EVERYTHING must be in ${detectedLanguage} - greetings, body, AND closings
+✓ WRITE THE ACTUAL EMAIL - not meta-commentary about writing it
 
 ═══════════════════════════════════════
-YOUR EMAIL REPLY (from ${userEmail} to ${recipientEmail}):
+OUTPUT THE COMPLETE EMAIL NOW (from ${userEmail}${isNewCompose ? '' : ` to ${recipientEmail}`}):
 ═══════════════════════════════════════`;
   
   console.log('[MailBot] Sending prompt to AI...');
@@ -1240,9 +1248,16 @@ YOUR EMAIL REPLY (from ${userEmail} to ${recipientEmail}):
   let result = await session.prompt(prompt);
   
   console.log('[MailBot] AI response received, length:', result.length);
+  console.log('[MailBot] AI raw output:', result.substring(0, 200));
   
   // Clean up session
   session.destroy();
+  
+  // Unescape any literal \n sequences if AI outputted them
+  if (result.includes('\\n')) {
+    console.log('[MailBot] ⚠️ Found literal \\n sequences, unescaping...');
+    result = result.replace(/\\n/g, '\n');
+  }
   
   // Apply signature fix (fallback post-processing)
   result = fixSignature(result, userDisplayName, recipientEmail);
@@ -1521,34 +1536,64 @@ function injectDualModePill(editableField, container, type) {
   
   // Style the dual pill container
   dualPill.style.display = 'inline-flex';
-  dualPill.style.background = '#000000';
-  dualPill.style.border = '1.5px solid #000000';
-  dualPill.style.borderRadius = '16px';
-  dualPill.style.padding = '8px 12px';  // Increased padding for larger draggable area
-  dualPill.style.gap = '12px';  // Increased gap between buttons for easier dragging
-  dualPill.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+  dualPill.style.background = 'rgba(30, 31, 34, 0.95)';
+  dualPill.style.backdropFilter = 'blur(12px) saturate(180%)';
+  dualPill.style.webkitBackdropFilter = 'blur(12px) saturate(180%)';
+  dualPill.style.border = '1.5px solid rgba(58, 59, 62, 0.6)';
+  dualPill.style.borderRadius = '12px';
+  dualPill.style.padding = '6px';
+  dualPill.style.gap = '4px';
+  dualPill.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
   dualPill.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-  dualPill.style.cursor = 'grab';  // Show grab cursor on the container
-  dualPill.style.marginBottom = '12px';  // Add spacing between pill and panels below
+  dualPill.style.cursor = 'grab';
+  dualPill.style.marginBottom = '12px';
   
   // Style individual mode buttons
   [composeBtn, summarizeBtn].forEach(btn => {
-    btn.style.padding = '8px 16px';
+    btn.style.padding = '8px 20px';
     btn.style.background = 'transparent';
-    btn.style.color = 'rgba(255, 255, 255, 0.6)';
+    btn.style.color = 'rgba(232, 234, 237, 0.6)';
     btn.style.border = 'none';
-    btn.style.borderRadius = '12px';
-    btn.style.cursor = 'pointer';  // Pointer cursor on buttons
-    btn.style.fontSize = '14px';
+    btn.style.borderRadius = '8px';
+    btn.style.cursor = 'pointer';
+    btn.style.fontSize = '13px';
     btn.style.fontWeight = '500';
-    btn.style.transition = 'all 0.2s ease';
+    btn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
     btn.style.whiteSpace = 'nowrap';
-    btn.style.pointerEvents = 'auto'; // Ensure buttons are clickable
+    btn.style.pointerEvents = 'auto';
+    btn.style.minWidth = '90px';
+    btn.style.letterSpacing = '0.01em';
   });
   
   // Compose is active by default
   composeBtn.style.background = '#ffffff';
   composeBtn.style.color = '#000000';
+  composeBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.2)';
+  
+  // Add hover micro-interactions with lift
+  [composeBtn, summarizeBtn].forEach(btn => {
+    btn.addEventListener('mouseenter', function() {
+      const isActive = this.style.background === '#ffffff' || this.style.background === 'rgb(255, 255, 255)';
+      if (isActive) {
+        this.style.transform = 'translateY(-1px)';
+        this.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.3)';
+      } else {
+        this.style.background = 'rgba(58, 59, 62, 0.5)';
+        this.style.color = '#E8EAED';
+      }
+    });
+    
+    btn.addEventListener('mouseleave', function() {
+      const isActive = this.style.background === '#ffffff' || this.style.background === 'rgb(255, 255, 255)';
+      if (isActive) {
+        this.style.transform = 'none';
+        this.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.2)';
+      } else {
+        this.style.background = 'transparent';
+        this.style.color = 'rgba(232, 234, 237, 0.6)';
+      }
+    });
+  });
   
   // Event listeners for mode switching (will be checked in drag logic)
   composeBtn.addEventListener('click', (e) => {
@@ -1569,11 +1614,16 @@ function injectDualModePill(editableField, container, type) {
 function openComposeMode(editableField, container, composeBtn, summarizeBtn) {
   console.log('[MailBot] Opening Compose mode');
   
-  // Update button states
+  // Update button states with smooth transitions
   composeBtn.style.background = '#ffffff';
   composeBtn.style.color = '#000000';
+  composeBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.2)';
+  composeBtn.style.transform = 'none';
+  
   summarizeBtn.style.background = 'transparent';
-  summarizeBtn.style.color = 'rgba(255, 255, 255, 0.6)';
+  summarizeBtn.style.color = 'rgba(232, 234, 237, 0.6)';
+  summarizeBtn.style.boxShadow = 'none';
+  summarizeBtn.style.transform = 'none';
   
   // Hide summarize panel if visible
   const summarizePanel = container.querySelector('.mailbot-summarize-panel');
@@ -1594,6 +1644,21 @@ function openComposeMode(editableField, container, composeBtn, summarizeBtn) {
     expandedPanel.style.opacity = '1';
     const input = expandedPanel.querySelector('.mailbot-input');
     if (input) input.focus();
+    
+    // Reset insert button state if there's no preview to insert
+    const insertBtn = expandedPanel.querySelector('.mailbot-insert-btn');
+    const previewContainer = container.querySelector('.mailbot-preview-container') || 
+                             document.querySelector('.mailbot-preview-container');
+    const hasVisiblePreview = previewContainer && previewContainer.style.display === 'block';
+    
+    if (insertBtn && !hasVisiblePreview) {
+      insertBtn.disabled = true;
+      insertBtn.style.opacity = '0.6';
+      insertBtn.style.cursor = 'not-allowed';
+      insertBtn.style.background = '#BDC1C6';
+      insertBtn.style.color = '#3C4043';
+      insertBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+    }
   }
   
   container.setAttribute('data-state', 'compose');
@@ -1605,11 +1670,16 @@ function openComposeMode(editableField, container, composeBtn, summarizeBtn) {
 function openSummarizeMode(editableField, container, composeBtn, summarizeBtn) {
   console.log('[MailBot] Opening Summarize mode');
   
-  // Update button states
+  // Update button states with smooth transitions
   summarizeBtn.style.background = '#ffffff';
   summarizeBtn.style.color = '#000000';
+  summarizeBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.2)';
+  summarizeBtn.style.transform = 'none';
+  
   composeBtn.style.background = 'transparent';
-  composeBtn.style.color = 'rgba(255, 255, 255, 0.6)';
+  composeBtn.style.color = 'rgba(232, 234, 237, 0.6)';
+  composeBtn.style.boxShadow = 'none';
+  composeBtn.style.transform = 'none';
   
   // Keep dual pill visible (don't hide it)
   
@@ -1645,6 +1715,20 @@ function openSummarizeMode(editableField, container, composeBtn, summarizeBtn) {
   summarizePanel.style.display = 'flex';
   summarizePanel.style.opacity = '1';
   
+  // Reset copy button state if there's no preview to copy
+  const copyBtn = summarizePanel.querySelector('.mb-summary-copy');
+  const summarizePreview = document.querySelector('.mailbot-summarize-preview');
+  const hasVisiblePreview = summarizePreview && summarizePreview.style.display === 'flex';
+  
+  if (copyBtn && !hasVisiblePreview) {
+    copyBtn.disabled = true;
+    copyBtn.style.opacity = '0.6';
+    copyBtn.style.cursor = 'not-allowed';
+    copyBtn.style.background = '#BDC1C6';
+    copyBtn.style.color = '#3C4043';
+    copyBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+  }
+  
   container.setAttribute('data-state', 'summarize');
 }
 
@@ -1660,10 +1744,16 @@ function createSummarizePanel(editableField) {
     <div class="mb-summary-header">
       <span class="mb-summary-title">What's being discussed?</span>
       <div class="mb-summary-compact-actions">
-        <button class="mb-summary-generate">Generate</button>
-        <button class="mb-summary-copy" disabled>Copy</button>
+        <button class="mb-summary-generate">
+          Generate
+          <span class="mailbot-loading-dot"></span>
+        </button>
+        <button class="mb-summary-copy" disabled>
+          Copy
+          <span class="mailbot-loading-dot"></span>
+        </button>
         <button class="mb-summary-close" title="Close">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M10 2L4 8L10 14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
@@ -1685,15 +1775,18 @@ function createSummarizePanel(editableField) {
  */
 function styleSummarizePanel(panel) {
   panel.style.display = 'none';
-  panel.style.flexDirection = 'column';
-  panel.style.background = '#000000';
-  panel.style.border = '1.5px solid #000000';
-  panel.style.borderRadius = '16px';
-  panel.style.padding = '10px 20px';
-  panel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+  panel.style.flexDirection = 'row';
+  panel.style.alignItems = 'center';
+  panel.style.background = 'rgba(30, 31, 34, 0.95)';
+  panel.style.backdropFilter = 'blur(12px) saturate(180%)';
+  panel.style.webkitBackdropFilter = 'blur(12px) saturate(180%)';
+  panel.style.border = '1.5px solid rgba(58, 59, 62, 0.6)';
+  panel.style.borderRadius = '12px';
+  panel.style.padding = '14px 16px';
+  panel.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
   panel.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
   panel.style.minWidth = '500px';
-  panel.style.gap = '0';
+  panel.style.gap = '12px';
   panel.style.opacity = '1';
   panel.style.cursor = 'grab';  // Make panel draggable
   
@@ -1703,18 +1796,19 @@ function styleSummarizePanel(panel) {
   header.style.justifyContent = 'space-between';
   header.style.alignItems = 'center';
   header.style.gap = '12px';
+  header.style.flex = '1';
   header.style.cursor = 'grab';  // Header is draggable
   
   const title = panel.querySelector('.mb-summary-title');
   title.style.fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
-  title.style.fontSize = '14px';
-  title.style.fontWeight = '600';
-  title.style.color = 'rgba(255, 255, 255, 0.9)';
-  title.style.marginBottom = '6px';
+  title.style.fontSize = '13px';
+  title.style.fontWeight = '500';
+  title.style.color = 'rgba(232, 234, 237, 0.7)';
   title.style.whiteSpace = 'nowrap';
   title.style.marginRight = '8px';
+  title.style.margin = '0';
   title.style.padding = '0';
-  title.style.lineHeight = 'normal';
+  title.style.lineHeight = '1.5';
   title.style.cursor = 'grab';  // Title is draggable
   
   // Compact actions container
@@ -1723,58 +1817,140 @@ function styleSummarizePanel(panel) {
   compactActions.style.gap = '8px';
   compactActions.style.alignItems = 'center';
   
-  // Style compact action buttons
+  // Style Generate button - White primary with loading dot
   const generateBtn = panel.querySelector('.mb-summary-generate');
-  const copyBtn = panel.querySelector('.mb-summary-copy');
-  const closeBtn = panel.querySelector('.mb-summary-close');
+  generateBtn.style.position = 'relative';
+  generateBtn.style.padding = '9px 32px 9px 18px';
+  generateBtn.style.background = '#ffffff';
+  generateBtn.style.color = '#000000';
+  generateBtn.style.border = 'none';
+  generateBtn.style.borderRadius = '8px';
+  generateBtn.style.fontSize = '13px';
+  generateBtn.style.fontWeight = '500';
+  generateBtn.style.cursor = 'pointer';
+  generateBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+  generateBtn.style.whiteSpace = 'nowrap';
+  generateBtn.style.letterSpacing = '0.01em';
+  generateBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+  generateBtn.style.minWidth = '88px';
   
-  [generateBtn, copyBtn].forEach(btn => {
-    btn.style.padding = '10px 20px';
-    btn.style.background = '#ffffff';
-    btn.style.color = '#000000';
-    btn.style.border = '1.5px solid #ffffff';
-    btn.style.borderRadius = '20px';
-    btn.style.fontSize = '14px';
-    btn.style.fontWeight = '500';
-    btn.style.cursor = 'pointer';
-    btn.style.transition = 'all 0.2s ease';
-    btn.style.whiteSpace = 'nowrap';
-    btn.style.letterSpacing = '0.3px';
-    btn.style.pointerEvents = 'auto';
-    
-    btn.addEventListener('mouseenter', () => {
-      btn.style.background = '#e8e8e8';
-      btn.style.transform = 'scale(1.02)';
-    });
-    
-    btn.addEventListener('mouseleave', () => {
-      btn.style.background = '#ffffff';
-      btn.style.transform = 'scale(1)';
-    });
+  generateBtn.addEventListener('mouseenter', () => {
+    if (!generateBtn.disabled) {
+      generateBtn.style.background = '#f8f9fa';
+      generateBtn.style.transform = 'translateY(-1px)';
+      generateBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.25)';
+    }
   });
   
-  // Style close button
-  closeBtn.style.padding = '8px';
-  closeBtn.style.background = '#ffffff';
-  closeBtn.style.color = '#000000';
+  generateBtn.addEventListener('mouseleave', () => {
+    generateBtn.style.background = '#ffffff';
+    generateBtn.style.transform = 'translateY(0)';
+    generateBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+  });
+  
+  // Style Copy button - Gray secondary with loading dot
+  const copyBtn = panel.querySelector('.mb-summary-copy');
+  copyBtn.style.position = 'relative';
+  copyBtn.style.padding = '9px 32px 9px 20px';
+  copyBtn.style.background = '#BDC1C6';
+  copyBtn.style.color = '#3C4043';
+  copyBtn.style.border = 'none';
+  copyBtn.style.borderRadius = '8px';
+  copyBtn.style.fontSize = '13px';
+  copyBtn.style.fontWeight = '500';
+  copyBtn.style.cursor = 'pointer';
+  copyBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+  copyBtn.style.whiteSpace = 'nowrap';
+  copyBtn.style.letterSpacing = '0.01em';
+  copyBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+  copyBtn.style.minWidth = '88px';
+  copyBtn.disabled = true;
+  copyBtn.style.opacity = '0.6';
+  copyBtn.style.cursor = 'not-allowed';
+  copyBtn.style.cursor = 'not-allowed';
+  
+  copyBtn.addEventListener('mouseenter', () => {
+    if (!copyBtn.disabled) {
+      // Check current state - if white (enabled), hover to lighter white
+      const isWhiteState = copyBtn.style.background === 'rgb(255, 255, 255)' || 
+                           copyBtn.style.background === '#ffffff';
+      if (isWhiteState) {
+        copyBtn.style.background = '#f8f9fa';
+        copyBtn.style.transform = 'translateY(-1px)';
+        copyBtn.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
+      } else {
+        copyBtn.style.background = '#A8ACB0';
+        copyBtn.style.transform = 'translateY(-1px)';
+        copyBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.25)';
+      }
+    }
+  });
+  
+  copyBtn.addEventListener('mouseleave', () => {
+    if (!copyBtn.disabled) {
+      // Restore to enabled state - check if it should be white or gray
+      const isWhiteState = copyBtn.style.background === 'rgb(248, 249, 250)' || 
+                           copyBtn.style.background === '#f8f9fa';
+      if (isWhiteState) {
+        copyBtn.style.background = '#ffffff';
+        copyBtn.style.color = '#000000';
+        copyBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+      } else {
+        copyBtn.style.background = '#BDC1C6';
+        copyBtn.style.color = '#3C4043';
+        copyBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+      }
+    } else {
+      copyBtn.style.background = '#BDC1C6';
+      copyBtn.style.color = '#3C4043';
+      copyBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+    }
+    copyBtn.style.transform = 'translateY(0)';
+  });
+  
+  // Style close button - Ghost black style (like Back button)
+  const closeBtn = panel.querySelector('.mb-summary-close');
+  closeBtn.style.padding = '8px 12px';
+  closeBtn.style.background = 'transparent';
+  closeBtn.style.color = 'rgba(232, 234, 237, 0.7)';
   closeBtn.style.border = 'none';
-  closeBtn.style.borderRadius = '50%';
-  closeBtn.style.width = '32px';
-  closeBtn.style.height = '32px';
+  closeBtn.style.borderRadius = '8px';
+  closeBtn.style.width = 'auto';
+  closeBtn.style.height = 'auto';
   closeBtn.style.display = 'flex';
   closeBtn.style.alignItems = 'center';
   closeBtn.style.justifyContent = 'center';
   closeBtn.style.cursor = 'pointer';
-  closeBtn.style.transition = 'all 0.2s ease';
+  closeBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+  closeBtn.style.boxShadow = 'none';
   
   closeBtn.addEventListener('mouseenter', () => {
-    closeBtn.style.background = '#e8e8e8';
-    closeBtn.style.transform = 'scale(1.05)';
+    closeBtn.style.background = 'rgba(232, 234, 237, 0.1)';
+    closeBtn.style.color = '#E8EAED';
+    closeBtn.style.transform = 'translateY(-1px)';
   });
   
   closeBtn.addEventListener('mouseleave', () => {
-    closeBtn.style.background = '#ffffff';
-    closeBtn.style.transform = 'scale(1)';
+    closeBtn.style.background = 'transparent';
+    closeBtn.style.color = 'rgba(232, 234, 237, 0.7)';
+    closeBtn.style.transform = 'translateY(0)';
+  });
+  
+  // Style loading dots
+  const loadingDots = panel.querySelectorAll('.mailbot-loading-dot');
+  loadingDots.forEach(dot => {
+    dot.style.position = 'absolute';
+    dot.style.right = '10px';
+    dot.style.top = '50%';
+    dot.style.transform = 'translateY(-50%)';
+    dot.style.width = '8px';
+    dot.style.height = '8px';
+    dot.style.borderRadius = '50%';
+    dot.style.backgroundColor = '#5E97F6';
+    dot.style.boxShadow = '0 0 6px rgba(94, 151, 246, 0.45)';
+    dot.style.opacity = '0';
+    dot.style.pointerEvents = 'none';
+    dot.style.transition = 'opacity 0.2s ease';
   });
 }
 
@@ -2055,6 +2231,11 @@ ACTION ITEMS:`;
       // Mark as generated
       summaryGenerated = true;
       copyBtn.disabled = false;
+      copyBtn.style.opacity = '1';
+      copyBtn.style.cursor = 'pointer';
+      copyBtn.style.background = '#ffffff';
+      copyBtn.style.color = '#000000';
+      copyBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
       
       // Create preview container if it doesn't exist
       if (!previewContainer) {
@@ -2140,11 +2321,13 @@ function stylePreviewContainer(previewContainer) {
   previewContainer.style.zIndex = '9999999';
   previewContainer.style.display = 'none';
   previewContainer.style.flexDirection = 'column';
-  previewContainer.style.background = '#000000';
-  previewContainer.style.border = '1.5px solid #000000';
-  previewContainer.style.borderRadius = '16px';
-  previewContainer.style.padding = '16px 20px';
-  previewContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+  previewContainer.style.background = 'rgba(30, 31, 34, 0.95)';
+  previewContainer.style.backdropFilter = 'blur(12px) saturate(180%)';
+  previewContainer.style.webkitBackdropFilter = 'blur(12px) saturate(180%)';
+  previewContainer.style.border = '1.5px solid rgba(58, 59, 62, 0.6)';
+  previewContainer.style.borderRadius = '12px';
+  previewContainer.style.padding = '14px 16px';
+  previewContainer.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
   previewContainer.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
   previewContainer.style.minWidth = '500px';
   previewContainer.style.maxWidth = '700px';
@@ -2164,20 +2347,20 @@ function stylePreviewContainer(previewContainer) {
   const levelDiv = previewContainer.querySelector('.mb-preview-level');
   levelDiv.style.display = 'flex';
   levelDiv.style.gap = '4px';
-  levelDiv.style.background = '#1a1a1a';
+  levelDiv.style.background = 'rgba(42, 43, 46, 0.6)';
   levelDiv.style.padding = '4px';
   levelDiv.style.borderRadius = '12px';
   
   previewContainer.querySelectorAll('.mb-preview-level-btn').forEach(btn => {
     btn.style.padding = '6px 12px';
     btn.style.background = 'transparent';
-    btn.style.color = 'rgba(255, 255, 255, 0.6)';
+    btn.style.color = 'rgba(232, 234, 237, 0.7)';
     btn.style.border = 'none';
     btn.style.borderRadius = '8px';
     btn.style.cursor = 'pointer';
     btn.style.fontSize = '13px';
     btn.style.fontWeight = '500';
-    btn.style.transition = 'all 0.2s ease';
+    btn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
   });
   
   const activeLevel = previewContainer.querySelector('.mb-preview-level-active');
@@ -2190,20 +2373,20 @@ function stylePreviewContainer(previewContainer) {
   const toggleDiv = previewContainer.querySelector('.mb-preview-toggle');
   toggleDiv.style.display = 'flex';
   toggleDiv.style.gap = '4px';
-  toggleDiv.style.background = '#1a1a1a';
+  toggleDiv.style.background = 'rgba(42, 43, 46, 0.6)';
   toggleDiv.style.padding = '4px';
   toggleDiv.style.borderRadius = '12px';
   
   previewContainer.querySelectorAll('.mb-preview-toggle-btn').forEach(btn => {
     btn.style.padding = '6px 16px';
     btn.style.background = 'transparent';
-    btn.style.color = 'rgba(255, 255, 255, 0.6)';
+    btn.style.color = 'rgba(232, 234, 237, 0.7)';
     btn.style.border = 'none';
     btn.style.borderRadius = '8px';
     btn.style.cursor = 'pointer';
     btn.style.fontSize = '13px';
     btn.style.fontWeight = '500';
-    btn.style.transition = 'all 0.2s ease';
+    btn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
   });
   
   const activeToggle = previewContainer.querySelector('.mb-preview-toggle-active');
@@ -2214,24 +2397,26 @@ function stylePreviewContainer(previewContainer) {
   
   // Body
   const body = previewContainer.querySelector('.mb-preview-body');
-  body.style.padding = '12px';
-  body.style.background = '#1a1a1a';
-  body.style.border = '1.5px solid #333333';
-  body.style.borderRadius = '12px';
-  body.style.color = '#ffffff';
+  body.style.padding = '14px';
+  body.style.background = 'rgba(42, 43, 46, 0.8)';
+  body.style.border = '1.5px solid rgba(78, 79, 82, 0.8)';
+  body.style.borderRadius = '8px';
+  body.style.color = 'rgba(232, 234, 237, 0.95)';
   body.style.fontSize = '14px';
   body.style.lineHeight = '1.6';
   body.style.minHeight = '150px';
-  body.style.maxHeight = '400px';
+  body.style.maxHeight = '40vh';
   body.style.overflowY = 'auto';
   body.style.outline = 'none';
   body.style.whiteSpace = 'pre-wrap';
   body.style.wordWrap = 'break-word';
+  body.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+  body.style.cursor = 'text';
   
   // Metadata
   const meta = previewContainer.querySelector('.mb-preview-meta');
   meta.style.fontSize = '12px';
-  meta.style.color = 'rgba(255, 255, 255, 0.5)';
+  meta.style.color = 'rgba(232, 234, 237, 0.5)';
   meta.style.textAlign = 'center';
 }
 
@@ -2358,8 +2543,14 @@ function attachMailBotButton(editableField, type = 'dialog') {
     <label class="mailbot-label">What do you want to say?</label>
     <input type="text" class="mailbot-input" placeholder="Your thoughts..." />
     <div class="mailbot-controls">
-      <button class="mailbot-generate-btn">Generate</button>
-      <button class="mailbot-insert-btn">Insert</button>
+      <button class="mailbot-generate-btn">
+        Generate
+        <span class="mailbot-loading-dot"></span>
+      </button>
+      <button class="mailbot-insert-btn">
+        Insert
+        <span class="mailbot-loading-dot"></span>
+      </button>
       <button class="mailbot-collapse-btn" title="Collapse">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
           <path d="M10 2L4 8L10 14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
@@ -2401,60 +2592,62 @@ function attachMailBotButton(editableField, type = 'dialog') {
     btn.style.transition = 'all 0.2s ease';
     btn.style.opacity = '1';  // Initial opacity for fade transitions
     
-    // EXPANDED PANEL STYLING - Black theme to match MailBot button
+    // EXPANDED PANEL STYLING - Frosted glass design
     expandedPanel.style.display = 'none';
-    expandedPanel.style.background = '#000000';  // Black background
-    expandedPanel.style.border = '1.5px solid #000000';
-    expandedPanel.style.borderRadius = '16px';  // Match button's rounded rectangular shape
-    expandedPanel.style.padding = '10px 20px';  // Match button padding
-    expandedPanel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+    expandedPanel.style.background = 'rgba(30, 31, 34, 0.95)';
+    expandedPanel.style.backdropFilter = 'blur(12px) saturate(180%)';
+    expandedPanel.style.webkitBackdropFilter = 'blur(12px) saturate(180%)';
+    expandedPanel.style.border = '1.5px solid rgba(58, 59, 62, 0.6)';
+    expandedPanel.style.borderRadius = '12px';
+    expandedPanel.style.padding = '14px 16px';
+    expandedPanel.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
     expandedPanel.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
     expandedPanel.style.minWidth = '500px';
     expandedPanel.style.display = 'flex';
     expandedPanel.style.alignItems = 'center';
     expandedPanel.style.gap = '12px';
-    expandedPanel.style.cursor = 'grab';  // Show grab cursor for dragging
-    expandedPanel.style.display = 'none'; // Hidden initially
-    expandedPanel.style.opacity = '1';  // Initial opacity for fade transitions
+    expandedPanel.style.cursor = 'grab';
+    expandedPanel.style.display = 'none';
+    expandedPanel.style.opacity = '1';
     
-    // Style label - White text on black (also draggable)
+    // Style label - Muted text (also draggable)
     const label = expandedPanel.querySelector('.mailbot-label');
-    label.style.fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
-    label.style.fontSize = '14px';
-    label.style.fontWeight = '600';
-    label.style.color = 'rgba(255, 255, 255, 0.9)';
-    label.style.marginBottom = '6px';
+    label.style.fontFamily = "system-ui, -apple-system, 'Segoe UI', sans-serif";
+    label.style.fontSize = '13px';
+    label.style.fontWeight = '500';
+    label.style.color = 'rgba(232, 234, 237, 0.7)';
+    label.style.marginBottom = '0';
     label.style.whiteSpace = 'nowrap';
     label.style.marginRight = '8px';
-    label.style.cursor = 'grab';  // Label is draggable
-    label.style.padding = '0';  // Reset default label padding
-    label.style.lineHeight = 'normal';  // Reset line height
+    label.style.cursor = 'grab';
+    label.style.padding = '0';
+    label.style.lineHeight = '1.5';
+    label.style.letterSpacing = '0.01em';
     
-    // Style input - Dark with white text
+    // Style input - Frosted surface with visible border
     const input = expandedPanel.querySelector('.mailbot-input');
     input.style.flex = '1';
-    input.style.padding = '10px 16px';
-    input.style.background = '#1a1a1a';  // Dark gray background
-    input.style.color = '#ffffff';  // White text
-    input.style.border = '1.5px solid #333333';
-    input.style.borderRadius = '20px';  // Rounded rectangular
-    input.style.fontSize = '14px';
+    input.style.padding = '9px 14px';
+    input.style.background = '#2A2B2E';
+    input.style.color = '#E8EAED';
+    input.style.border = '1.5px solid #3A3B3E';
+    input.style.borderRadius = '10px';
+    input.style.fontSize = '13px';
     input.style.fontFamily = 'inherit';
     input.style.outline = 'none';
-    input.style.transition = 'all 0.2s ease';
-    input.style.cursor = 'text';  // Text cursor to indicate it's an input field
-    
-    // Placeholder styling
-    input.style.setProperty('::placeholder', 'color: rgba(255,255,255,0.5)');
+    input.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+    input.style.cursor = 'text';
     
     input.addEventListener('focus', () => {
-      input.style.background = '#2a2a2a';
-      input.style.borderColor = '#555555';
+      input.style.background = '#2A2B2E';
+      input.style.borderColor = '#5E97F6';
+      input.style.boxShadow = '0 0 0 2px rgba(94, 151, 246, 0.25)';
     });
     
     input.addEventListener('blur', () => {
-      input.style.background = '#1a1a1a';
-      input.style.borderColor = '#333333';
+      input.style.background = '#2A2B2E';
+      input.style.borderColor = '#3A3B3E';
+      input.style.boxShadow = 'none';
     });
     
     // Style controls container
@@ -2463,87 +2656,175 @@ function attachMailBotButton(editableField, type = 'dialog') {
     controls.style.gap = '8px';
     controls.style.alignItems = 'center';
     
-    // Style Generate button - White with black text for contrast
+    // Style Generate button - White primary button with loading dot
     const generateBtn = expandedPanel.querySelector('.mailbot-generate-btn');
-    generateBtn.style.padding = '10px 20px';
+    generateBtn.style.position = 'relative';
+    generateBtn.style.padding = '9px 32px 9px 18px';
     generateBtn.style.background = '#ffffff';
     generateBtn.style.color = '#000000';
-    generateBtn.style.border = '1.5px solid #ffffff';
-    generateBtn.style.borderRadius = '20px';  // Rounded rectangular
-    generateBtn.style.fontSize = '14px';
+    generateBtn.style.border = 'none';
+    generateBtn.style.borderRadius = '8px';
+    generateBtn.style.fontSize = '13px';
     generateBtn.style.fontWeight = '500';
     generateBtn.style.cursor = 'pointer';
-    generateBtn.style.transition = 'all 0.2s ease';
+    generateBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
     generateBtn.style.whiteSpace = 'nowrap';
-    generateBtn.style.letterSpacing = '0.3px';
+    generateBtn.style.letterSpacing = '0.01em';
+    generateBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+    generateBtn.style.minWidth = '88px';
     
     generateBtn.addEventListener('mouseenter', () => {
-      generateBtn.style.background = '#e8e8e8';
-      generateBtn.style.transform = 'scale(1.02)';
+      if (!generateBtn.disabled) {
+        generateBtn.style.background = '#f8f9fa';
+        generateBtn.style.transform = 'translateY(-1px)';
+        generateBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.25)';
+      }
     });
     
     generateBtn.addEventListener('mouseleave', () => {
       generateBtn.style.background = '#ffffff';
-      generateBtn.style.transform = 'scale(1)';
+      generateBtn.style.transform = 'translateY(0)';
+      generateBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
     });
     
-    // Style Insert button - White with black text (consistent)
+    // Style Insert button - Gray secondary button matching compose window
     const insertBtn = expandedPanel.querySelector('.mailbot-insert-btn');
-    insertBtn.style.padding = '10px 24px';
-    insertBtn.style.background = '#ffffff';
-    insertBtn.style.color = '#000000';
-    insertBtn.style.border = '1.5px solid #ffffff';
-    insertBtn.style.borderRadius = '20px';  // Rounded rectangular
-    insertBtn.style.fontSize = '14px';
+    insertBtn.style.position = 'relative';
+    insertBtn.style.padding = '9px 32px 9px 20px';
+    insertBtn.style.background = '#BDC1C6';
+    insertBtn.style.color = '#3C4043';
+    insertBtn.style.border = 'none';
+    insertBtn.style.borderRadius = '8px';
+    insertBtn.style.fontSize = '13px';
     insertBtn.style.fontWeight = '500';
     insertBtn.style.cursor = 'pointer';
-    insertBtn.style.transition = 'all 0.2s ease';
+    insertBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
     insertBtn.style.whiteSpace = 'nowrap';
-    insertBtn.style.letterSpacing = '0.3px';
+    insertBtn.style.letterSpacing = '0.01em';
+    insertBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+    insertBtn.style.minWidth = '88px';
     
     insertBtn.addEventListener('mouseenter', () => {
-      insertBtn.style.background = '#e8e8e8';
-      insertBtn.style.transform = 'scale(1.02)';
+      if (!insertBtn.disabled) {
+        // Check current state - if white (enabled), hover to lighter white
+        const isWhiteState = insertBtn.style.background === 'rgb(255, 255, 255)' || 
+                             insertBtn.style.background === '#ffffff';
+        if (isWhiteState) {
+          insertBtn.style.background = '#f8f9fa';
+          insertBtn.style.transform = 'translateY(-1px)';
+          insertBtn.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
+        } else {
+          insertBtn.style.background = '#A8ACB0';
+          insertBtn.style.transform = 'translateY(-1px)';
+          insertBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.25)';
+        }
+      }
     });
     
     insertBtn.addEventListener('mouseleave', () => {
-      insertBtn.style.background = '#ffffff';
-      insertBtn.style.transform = 'scale(1)';
+      if (!insertBtn.disabled) {
+        // Restore to enabled state - check if it should be white or gray
+        // If button was enabled after generation, it should be white
+        const isWhiteState = insertBtn.style.background === 'rgb(248, 249, 250)' || 
+                             insertBtn.style.background === '#f8f9fa';
+        if (isWhiteState) {
+          insertBtn.style.background = '#ffffff';
+          insertBtn.style.color = '#000000';
+          insertBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+        } else {
+          insertBtn.style.background = '#BDC1C6';
+          insertBtn.style.color = '#3C4043';
+          insertBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+        }
+      } else {
+        insertBtn.style.background = '#BDC1C6';
+        insertBtn.style.color = '#3C4043';
+        insertBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+      }
+      insertBtn.style.transform = 'translateY(0)';
     });
     
-    // Style collapse button (chevron) - White button with black icon
+    // Style disabled state for Insert button
+    insertBtn.disabled = true;
+    insertBtn.style.opacity = '0.6';
+    insertBtn.style.cursor = 'not-allowed';
+    
+    // Style collapse button (Back button) - Ghost black style
     const collapseBtn = expandedPanel.querySelector('.mailbot-collapse-btn');
-    collapseBtn.style.padding = '8px';
-    collapseBtn.style.background = '#ffffff';  // White background
-    collapseBtn.style.color = '#000000';  // Black icon
-    collapseBtn.style.border = '1.5px solid #ffffff';
-    collapseBtn.style.borderRadius = '50%';  // Circular
-    collapseBtn.style.width = '36px';
-    collapseBtn.style.height = '36px';
+    collapseBtn.style.padding = '8px 12px';
+    collapseBtn.style.background = 'transparent';
+    collapseBtn.style.color = 'rgba(232, 234, 237, 0.7)';
+    collapseBtn.style.border = 'none';
+    collapseBtn.style.borderRadius = '8px';
+    collapseBtn.style.width = 'auto';
+    collapseBtn.style.height = 'auto';
     collapseBtn.style.display = 'flex';
     collapseBtn.style.alignItems = 'center';
     collapseBtn.style.justifyContent = 'center';
     collapseBtn.style.cursor = 'pointer';
-    collapseBtn.style.transition = 'all 0.2s ease';
+    collapseBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+    collapseBtn.style.boxShadow = 'none';
     
     collapseBtn.addEventListener('mouseenter', () => {
-      collapseBtn.style.background = '#e8e8e8';  // Slightly dimmed white
-      collapseBtn.style.transform = 'scale(1.05)';
+      collapseBtn.style.background = 'rgba(232, 234, 237, 0.1)';
+      collapseBtn.style.color = '#E8EAED';
+      collapseBtn.style.transform = 'translateY(-1px)';
     });
     
     collapseBtn.addEventListener('mouseleave', () => {
-      collapseBtn.style.background = '#ffffff';  // Back to white
-      collapseBtn.style.transform = 'scale(1)';
+      collapseBtn.style.background = 'transparent';
+      collapseBtn.style.color = 'rgba(232, 234, 237, 0.7)';
+      collapseBtn.style.transform = 'translateY(0)';
     });
     
-    // Style preview container - Separate box below expanded panel
+    // Style loading dots for both Generate and Insert buttons
+    const loadingDots = expandedPanel.querySelectorAll('.mailbot-loading-dot');
+    loadingDots.forEach(dot => {
+      dot.style.position = 'absolute';
+      dot.style.right = '10px';
+      dot.style.top = '50%';
+      dot.style.transform = 'translateY(-50%)';
+      dot.style.width = '8px';
+      dot.style.height = '8px';
+      dot.style.borderRadius = '50%';
+      dot.style.backgroundColor = '#5E97F6';
+      dot.style.boxShadow = '0 0 6px rgba(94, 151, 246, 0.45)';
+      dot.style.opacity = '0';
+      dot.style.pointerEvents = 'none';
+      dot.style.transition = 'opacity 0.2s ease';
+    });
+    
+    // Add animation for loading dot pulsing
+    const styleEl = document.createElement('style');
+    styleEl.textContent = `
+      @keyframes mailbot-pulse {
+        0%, 100% {
+          transform: translateY(-50%) scale(1);
+          opacity: 0.6;
+        }
+        50% {
+          transform: translateY(-50%) scale(1.3);
+          opacity: 1;
+        }
+      }
+      .mailbot-generate-btn.loading .mailbot-loading-dot,
+      .mailbot-insert-btn.loading .mailbot-loading-dot {
+        opacity: 1 !important;
+        animation: mailbot-pulse 1.2s infinite;
+      }
+    `;
+    document.head.appendChild(styleEl);
+    
+    // Style preview container - Frosted glass separate box
     previewContainer.style.position = 'fixed';
     previewContainer.style.zIndex = '9999999';
-    previewContainer.style.background = '#000000';
-    previewContainer.style.border = '1.5px solid #000000';
-    previewContainer.style.borderRadius = '16px';
-    previewContainer.style.padding = '16px 20px';
-    previewContainer.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+    previewContainer.style.background = 'rgba(30, 31, 34, 0.95)';
+    previewContainer.style.backdropFilter = 'blur(12px) saturate(180%)';
+    previewContainer.style.webkitBackdropFilter = 'blur(12px) saturate(180%)';
+    previewContainer.style.border = '1.5px solid rgba(58, 59, 62, 0.6)';
+    previewContainer.style.borderRadius = '12px';
+    previewContainer.style.padding = '14px 16px';
+    previewContainer.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
     previewContainer.style.fontFamily = 'system-ui, -apple-system, "Segoe UI", sans-serif';
     previewContainer.style.minWidth = '500px';
     previewContainer.style.maxWidth = '700px';
@@ -2552,19 +2833,21 @@ function attachMailBotButton(editableField, type = 'dialog') {
     
     // Style preview content
     const previewContent = previewContainer.querySelector('.mailbot-preview-content');
-    previewContent.style.padding = '12px';
-    previewContent.style.background = '#1a1a1a';
-    previewContent.style.border = '1.5px solid #333333';
-    previewContent.style.borderRadius = '12px';
-    previewContent.style.color = '#ffffff';
+    previewContent.style.padding = '14px';
+    previewContent.style.background = 'rgba(42, 43, 46, 0.8)';
+    previewContent.style.border = '1.5px solid rgba(78, 79, 82, 0.8)';
+    previewContent.style.borderRadius = '8px';
+    previewContent.style.color = 'rgba(232, 234, 237, 0.95)';
     previewContent.style.fontSize = '14px';
     previewContent.style.lineHeight = '1.6';
     previewContent.style.whiteSpace = 'pre-wrap';
     previewContent.style.wordWrap = 'break-word';
-    previewContent.style.maxHeight = '300px';
+    previewContent.style.maxHeight = '40vh';
     previewContent.style.overflowY = 'auto';
     previewContent.style.outline = 'none';
-    previewContent.style.minHeight = '100px';
+    previewContent.style.minHeight = '150px';
+    previewContent.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+    previewContent.style.cursor = 'text';
     
     // Variable to store generated text
     let generatedText = null;
@@ -2688,10 +2971,11 @@ function attachMailBotButton(editableField, type = 'dialog') {
       
       console.log('[MailBot] Generate clicked with prompt:', userPrompt);
       
-      // Show loading state
-      generateBtn.textContent = 'Generating...';
+      // Show loading state with blue dot
+      generateBtn.classList.add('loading');
       generateBtn.disabled = true;
-      generateBtn.style.opacity = '0.6';
+      generateBtn.style.opacity = '0.7';
+      generateBtn.style.cursor = 'not-allowed';
       
       try {
         // Get thread context with enhanced metadata (pass editableField to detect reply position)
@@ -2867,10 +3151,21 @@ function attachMailBotButton(editableField, type = 'dialog') {
         console.error('[MailBot] ✗ Generation failed:', error);
         alert('Failed to generate reply:\n\n' + error.message);
       } finally {
-        // Reset button
-        generateBtn.textContent = 'Generate';
+        // Reset button state
+        generateBtn.classList.remove('loading');
         generateBtn.disabled = false;
         generateBtn.style.opacity = '1';
+        generateBtn.style.cursor = 'pointer';
+        
+        // Enable insert button if we have generated text - change to white (primary style)
+        if (generatedText) {
+          insertBtn.disabled = false;
+          insertBtn.style.opacity = '1';
+          insertBtn.style.cursor = 'pointer';
+          insertBtn.style.background = '#ffffff';
+          insertBtn.style.color = '#000000';
+          insertBtn.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)';
+        }
       }
     });
     
@@ -3007,6 +3302,7 @@ function attachMailBotButton(editableField, type = 'dialog') {
       if (isCollapsed) {
         btn.style.cursor = 'grabbing';
         btn.style.transition = 'none';
+        btn.style.background = 'rgba(30, 31, 34, 0.95)'; // Maintain color during drag
       } else if (isSummarize) {
         const summarizePanel = container.querySelector('.mailbot-summarize-panel');
         if (summarizePanel) {
@@ -3015,11 +3311,13 @@ function attachMailBotButton(editableField, type = 'dialog') {
         }
         btn.style.cursor = 'grabbing';
         btn.style.transition = 'none';
+        btn.style.background = 'rgba(30, 31, 34, 0.95)'; // Maintain color during drag
       } else {
         expandedPanel.style.cursor = 'grabbing';
         expandedPanel.style.transition = 'none';
         btn.style.cursor = 'grabbing';
         btn.style.transition = 'none';
+        btn.style.background = 'rgba(30, 31, 34, 0.95)'; // Maintain color during drag
       }
       
       const rect = container.getBoundingClientRect();
@@ -3182,17 +3480,19 @@ function attachMailBotButton(editableField, type = 'dialog') {
     // Hover effect for inline (only when not dragging and collapsed)
     btn.addEventListener('mouseenter', () => {
       if (!isDragging && container.getAttribute('data-state') === 'collapsed') {
-        btn.style.background = '#1a1a1a';
-        btn.style.border = '1.5px solid #333333';
-        btn.style.transform = 'scale(1.02)';
+        btn.style.background = 'rgba(58, 59, 62, 0.95)';
+        btn.style.border = '1.5px solid rgba(78, 79, 82, 0.7)';
+        btn.style.transform = 'translateY(-1px)';
+        btn.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.5)';
       }
     });
     
     btn.addEventListener('mouseleave', () => {
       if (!isDragging && container.getAttribute('data-state') === 'collapsed') {
-        btn.style.background = '#000000';
-        btn.style.border = '1.5px solid #000000';
-        btn.style.transform = 'scale(1)';
+        btn.style.background = 'rgba(30, 31, 34, 0.95)';
+        btn.style.border = '1.5px solid rgba(58, 59, 62, 0.6)';
+        btn.style.transform = 'none';
+        btn.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4)';
       }
     });
   } else {
@@ -3284,30 +3584,45 @@ function attachMailBotButton(editableField, type = 'dialog') {
 }
 
 /**
- * Position MailBot panel beside Gmail compose window with intelligent left/right placement
- * - Attaches panel inside compose container as absolute positioned element
- * - Prefers left placement, flips to right if insufficient space
- * - Computes top position below compose header (To/Subject fields)
- * - Handles window resize and compose DOM changes
- * - Returns cleanup function to remove observers when compose closes
+ * Smart left-first placement for MailBot compose panel
+ * 
+ * Placement strategy (in priority order):
+ * 1. LEFT of compose box (preferred) - outside compose content
+ * 2. RIGHT of compose box - if left doesn't have room
+ * 3. ABOVE compose header - centered inside compose if neither side fits
+ * 4. Shrink width to fit if necessary
+ * 
+ * Features:
+ * - Ensures composeEl is position: relative
+ * - Calculates available space and attempts left-first placement
+ * - Clamps vertical position to keep panel fully visible in viewport
+ * - Adds resize listener and MutationObserver to recompute placement
+ * - Returns cleanup function that removes listener and observer
+ * - Uses try/catch with sensible fallbacks
  * 
  * @param {HTMLElement} composeEl - Gmail compose container (typically div[role="dialog"])
  * @param {HTMLElement} panelEl - MailBot panel element to position
- * @param {Object} options - Configuration options
- * @param {number} options.padding - Space between panel and compose edge (default: 8)
- * @param {number} options.maxWidth - Maximum panel width in pixels (default: 420)
+ * @param {Object} opts - Configuration options
+ * @param {number} opts.padding - Space between panel and compose edge (default: 12)
+ * @param {number} opts.maxWidth - Maximum panel width in pixels (default: 420)
+ * @param {number} opts.minWidth - Minimum panel width in pixels (default: 320)
  * @returns {Function} Cleanup function to remove observers and listeners
+ * 
+ * @acceptance_test Left placement is preferred when space available
+ * @acceptance_test Panel does not overlap with compose body content
+ * @acceptance_test Cleanup function removes all listeners and observers
  */
-function positionPanelBesideCompose(composeEl, panelEl, options = {}) {
-  const { padding = 8, maxWidth = 420 } = options;
+function smartPlacePanel(composeEl, panelEl, opts = {}) {
+  const { padding = 12, maxWidth = 420, minWidth = 320 } = opts;
   
   if (!composeEl || !panelEl) {
-    console.warn('[MailBot Compose] Missing compose or panel element for positioning');
+    console.warn('[MailBot Smart Placement] Missing compose or panel element');
     return () => {};
   }
   
   // Prevent duplicate attachment
   if (composeEl.dataset.mailbotInjected === 'true') {
+    console.log('[MailBot Smart Placement] Already attached to this compose');
     return () => {};
   }
   composeEl.dataset.mailbotInjected = 'true';
@@ -3328,10 +3643,8 @@ function positionPanelBesideCompose(composeEl, panelEl, options = {}) {
   let observerTimeout;
   
   /**
-   * Compute and apply panel position
-   * - Determines left vs right placement based on available space
-   * - Calculates top position based on compose header elements
-   * - Sets panel width responsively
+   * Compute and apply smart panel positioning
+   * Attempts left-first, then right, then above, with viewport clamping
    */
   function computePosition() {
     if (isPositioning) return;
@@ -3340,92 +3653,108 @@ function positionPanelBesideCompose(composeEl, panelEl, options = {}) {
     try {
       const composeRect = composeEl.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
       
-      // Calculate available space on left and right
+      // Calculate available space on left and right (outside compose)
       const leftSpace = composeRect.left;
       const rightSpace = viewportWidth - composeRect.right;
       
-      // Determine panel width: responsive based on viewport
-      // For narrow screens, use a smaller fixed width inside compose
-      const calculatedWidth = Math.round(composeRect.width * 0.45);
-      const width = Math.min(maxWidth, Math.max(300, calculatedWidth));
+      // Determine panel width: prefer maxWidth, but shrink if needed
+      let panelWidth = maxWidth;
       
-      // Check if we have enough space beside the compose window
-      const hasSpaceBeside = (leftSpace >= width + padding * 2) || (rightSpace >= width + padding * 2);
-      
-      let placement = 'inside'; // Default to inside compose
-      
-      if (hasSpaceBeside) {
-        // We have space beside - prefer left, else right
-        if (leftSpace >= width + padding * 2) {
-          placement = 'left';
-        } else if (rightSpace >= width + padding * 2) {
-          placement = 'right';
-        }
-      }
-      
-      // Find compose header elements to calculate top position
-      // Look for To/Subject/CC fields - use the bottommost element
-      const headerSelectors = 'input, textarea, [role="textbox"], .aoT, .vO, [name="to"], [name="subjectbox"]';
+      // Find compose header bottom to position below it (avoid overlapping To/Subject fields)
+      const headerSelectors = 'input[name="to"], input[name="subjectbox"], textarea[name="to"], .aoT, .vO';
       const headerElements = Array.from(composeEl.querySelectorAll(headerSelectors));
       
       let headerBottom = 0;
-      if (headerElements.length > 0) {
-        headerElements.forEach(el => {
-          const rect = el.getBoundingClientRect();
-          // Skip invisible elements
-          if (rect.width > 0 && rect.height > 0) {
-            const relativeBottom = rect.bottom - composeRect.top;
-            headerBottom = Math.max(headerBottom, relativeBottom);
-          }
-        });
-      }
+      headerElements.forEach(el => {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          const relativeBottom = rect.bottom - composeRect.top;
+          headerBottom = Math.max(headerBottom, relativeBottom);
+        }
+      });
       
-      // Fallback to default if no header elements found or value seems wrong
-      // Gmail compose headers are typically within first 200px
-      let topPosition;
-      if (headerBottom > 20 && headerBottom < 300) {
-        topPosition = headerBottom + padding;
-      } else {
-        // Use a more conservative default - look for subject field specifically
+      // Fallback if no header found
+      if (headerBottom < 20 || headerBottom > 300) {
         const subjectField = composeEl.querySelector('input[name="subjectbox"]');
         if (subjectField) {
-          const subjectRect = subjectField.getBoundingClientRect();
-          topPosition = (subjectRect.bottom - composeRect.top) + padding;
+          headerBottom = subjectField.getBoundingClientRect().bottom - composeRect.top;
         } else {
-          topPosition = 120; // Safe fallback
+          headerBottom = 80; // Safe default below typical header
         }
       }
       
-      // Apply positioning
+      // Determine placement strategy
+      let placement = 'left'; // Default preference
+      let topPosition = headerBottom + padding;
+      
+      // Strategy 1: Try LEFT (preferred)
+      if (leftSpace >= panelWidth + padding * 2) {
+        placement = 'left';
+        panelWidth = Math.min(maxWidth, Math.max(minWidth, leftSpace - padding * 2));
+      }
+      // Strategy 2: Try RIGHT if left insufficient
+      else if (rightSpace >= panelWidth + padding * 2) {
+        placement = 'right';
+        panelWidth = Math.min(maxWidth, Math.max(minWidth, rightSpace - padding * 2));
+      }
+      // Strategy 3: Place ABOVE compose header (centered, inside compose)
+      else {
+        placement = 'above';
+        panelWidth = Math.min(maxWidth, composeRect.width - padding * 2);
+        panelWidth = Math.max(minWidth, panelWidth);
+        topPosition = padding; // At top of compose, above header
+      }
+      
+      // Clamp vertical position to keep panel fully visible in viewport
+      const panelHeight = panelEl.offsetHeight || 200; // Fallback if not rendered yet
+      const absoluteTop = composeRect.top + topPosition;
+      const absoluteBottom = absoluteTop + panelHeight;
+      
+      if (absoluteBottom > viewportHeight - 20) {
+        // Panel would overflow viewport bottom - adjust top position
+        const overflow = absoluteBottom - (viewportHeight - 20);
+        topPosition = Math.max(padding, topPosition - overflow);
+      }
+      
+      if (absoluteTop < 20) {
+        // Panel would overflow viewport top - clamp to minimum
+        topPosition = Math.max(padding, 20 - composeRect.top);
+      }
+      
+      // Apply positioning based on placement strategy
       panelEl.style.position = 'absolute';
       panelEl.style.top = `${topPosition}px`;
       
-      // Remove previous placement classes
-      panelEl.classList.remove('mailbot-left', 'mailbot-right', 'mailbot-inside');
+      // Get current panel width (might be set by shrinkPanelToContent)
+      const currentWidth = panelEl.offsetWidth || panelWidth;
+      const effectiveWidth = Math.max(minWidth, Math.min(maxWidth, currentWidth));
+      
+      // Remove all placement classes
+      panelEl.classList.remove('mailbot-left', 'mailbot-right', 'mailbot-above', 'mailbot-inside');
       
       if (placement === 'left') {
-        // Position to the left OUTSIDE compose
+        // Position LEFT of compose (outside)
         panelEl.classList.add('mailbot-left');
-        panelEl.style.width = `${width}px`;
-        panelEl.style.left = `${-width - padding}px`;
+        panelEl.style.left = `${-effectiveWidth - padding}px`;
         panelEl.style.right = 'auto';
         panelEl.style.transform = 'none';
+        console.log(`[MailBot Smart Placement] ✓ LEFT placement (${effectiveWidth}px)`);
       } else if (placement === 'right') {
-        // Position to the right OUTSIDE compose
+        // Position RIGHT of compose (outside)
         panelEl.classList.add('mailbot-right');
-        panelEl.style.width = `${width}px`;
-        panelEl.style.right = `${-width - padding}px`;
+        panelEl.style.right = `${-effectiveWidth - padding}px`;
         panelEl.style.left = 'auto';
         panelEl.style.transform = 'none';
-      } else {
-        // Position INSIDE compose - centered horizontally
-        panelEl.classList.add('mailbot-inside');
-        panelEl.style.width = '90%';
-        panelEl.style.maxWidth = '500px';
+        console.log(`[MailBot Smart Placement] ✓ RIGHT placement (${effectiveWidth}px)`);
+      } else if (placement === 'above') {
+        // Position ABOVE compose header (centered, inside compose)
+        panelEl.classList.add('mailbot-above');
         panelEl.style.left = '50%';
         panelEl.style.right = 'auto';
         panelEl.style.transform = 'translateX(-50%)';
+        console.log(`[MailBot Smart Placement] ✓ ABOVE placement (${effectiveWidth}px)`);
       }
       
       // Show panel after positioning
@@ -3433,12 +3762,15 @@ function positionPanelBesideCompose(composeEl, panelEl, options = {}) {
       panelEl.style.visibility = 'visible';
       
     } catch (err) {
-      console.warn('[MailBot Compose] Positioning failed:', err);
-      // Fallback positioning
+      console.error('[MailBot Smart Placement] Positioning failed:', err);
+      // Fallback positioning - left side with conservative values
       panelEl.style.position = 'absolute';
-      panelEl.style.top = '64px';
+      panelEl.style.top = '90px';
       panelEl.style.left = '-360px';
       panelEl.style.width = '340px';
+      panelEl.style.right = 'auto';
+      panelEl.style.transform = 'none';
+      panelEl.classList.remove('mailbot-right', 'mailbot-above', 'mailbot-inside');
       panelEl.classList.add('mailbot-left');
       panelEl.style.opacity = '1';
       panelEl.style.visibility = 'visible';
@@ -3447,7 +3779,7 @@ function positionPanelBesideCompose(composeEl, panelEl, options = {}) {
     }
   }
   
-  // Hide panel initially
+  // Hide panel initially until positioned
   panelEl.style.opacity = '0';
   panelEl.style.visibility = 'hidden';
   
@@ -3461,24 +3793,221 @@ function positionPanelBesideCompose(composeEl, panelEl, options = {}) {
   };
   window.addEventListener('resize', handleResize);
   
-  // Watch for DOM changes in compose (throttled)
+  // Watch for DOM changes in compose (throttled) - header might change size
   const observer = new MutationObserver(() => {
     clearTimeout(observerTimeout);
     observerTimeout = setTimeout(() => computePosition(), 200);
   });
-  observer.observe(composeEl, { childList: true, subtree: true });
+  observer.observe(composeEl, { childList: true, subtree: true, attributes: false });
+  
+  // Listen for manual recompute requests
+  const handleRecompute = () => {
+    computePosition();
+  };
+  panelEl.addEventListener('mailbot-recompute', handleRecompute);
   
   // Return cleanup function
   return () => {
     clearTimeout(resizeTimeout);
     clearTimeout(observerTimeout);
     window.removeEventListener('resize', handleResize);
+    panelEl.removeEventListener('mailbot-recompute', handleRecompute);
     observer.disconnect();
     delete composeEl.dataset.mailbotInjected;
-    if (panelEl.parentElement) {
+    if (panelEl.parentElement === composeEl) {
       panelEl.remove();
     }
-    console.log('[MailBot Compose] ✓ Positioning cleanup completed');
+    console.log('[MailBot Smart Placement] ✓ Cleanup completed');
+  };
+}
+
+/**
+ * Adaptive compact panel sizing - measures actual content and clamps to available space
+ * Ensures panel width always fits content with no wasted space
+ * 
+ * @param {HTMLElement} composeEl - Compose container (for anchor rect calculation)
+ * @param {HTMLElement} panelEl - Panel element to resize
+ * @param {Object} opts - Options
+ * @param {number} opts.minWidth - Minimum width in pixels (default: 280)
+ * @param {number} opts.maxWidth - Maximum width in pixels (default: 380)
+ * @param {number} opts.hPadding - Horizontal padding buffer (default: 20)
+ * @returns {Function} Cleanup function to disconnect observers
+ */
+function shrinkPanelToContent(composeEl, panelEl, opts = {}) {
+  const MIN = opts.minWidth ?? 280;
+  const MAX = opts.maxWidth ?? 380;
+  const PADDING = opts.hPadding ?? 20;
+
+  function compute() {
+    try {
+      // Temporarily set to auto to measure natural width
+      panelEl.style.width = 'auto';
+      panelEl.style.maxWidth = 'none';
+      
+      // Measure the content - use button section as it's the widest row
+      const row = panelEl.querySelector('.mb-button-section') || panelEl;
+      const needed = Math.ceil(row.scrollWidth + PADDING);
+      
+      // Calculate available space based on panel position
+      const anchorRect = composeEl.getBoundingClientRect();
+      let maxAvailable = MAX;
+      
+      if (panelEl.classList.contains('mailbot-left')) {
+        maxAvailable = Math.max(MIN, anchorRect.left - 16);
+      } else if (panelEl.classList.contains('mailbot-right')) {
+        const rightSpace = window.innerWidth - anchorRect.right;
+        maxAvailable = Math.max(MIN, rightSpace - 16);
+      } else {
+        maxAvailable = Math.max(MIN, window.innerWidth - 32);
+      }
+      
+      // Clamp to min/max and available space
+      const finalWidth = Math.max(MIN, Math.min(needed, Math.min(MAX, maxAvailable)));
+      panelEl.style.width = `${finalWidth}px`;
+      panelEl.style.maxWidth = '';
+      
+      console.log(`[MailBot Shrink] ${finalWidth}px (needed: ${needed}px, max: ${maxAvailable}px)`);
+      
+    } catch (err) {
+      console.warn('[MailBot Shrink] Error:', err);
+      panelEl.style.width = '';
+      panelEl.style.maxWidth = '';
+    }
+  }
+
+  // Throttle to prevent excessive calls
+  let computeTimeout;
+  function throttledCompute() {
+    clearTimeout(computeTimeout);
+    computeTimeout = setTimeout(() => compute(), 100);
+  }
+
+  // Initial compute
+  setTimeout(() => compute(), 150);
+
+  // Observe ONLY childList changes (loading dot appearing/disappearing)
+  // NOT attributes or characterData - those fire too frequently
+  const mo = new MutationObserver(() => throttledCompute());
+  mo.observe(panelEl, { subtree: true, childList: true, attributes: false, characterData: false });
+
+  // Window resize
+  const handleResize = () => throttledCompute();
+  window.addEventListener('resize', handleResize);
+
+  return () => {
+    clearTimeout(computeTimeout);
+    mo.disconnect();
+    window.removeEventListener('resize', handleResize);
+  };
+}
+
+/**
+ * Initialize preview panel with interactive behaviors
+ * - Click-to-edit with contenteditable toggle
+ * - Regenerate button wiring
+ * - Copy to clipboard functionality
+ * - Insert into compose functionality
+ * - Keyboard shortcuts (Escape to exit edit, Enter on regenerate)
+ * - Accessibility announcements via aria-live
+ * 
+ * @param {HTMLElement} panelEl - Preview panel element
+ * @param {Object} context - Context object containing necessary functions and elements
+ * @param {Function} context.generateFunction - Function to call for regeneration
+ * @param {Function} context.insertFunction - Function to call for insertion
+ * @param {HTMLElement} context.subjectEl - Preview subject element  
+ * @param {HTMLElement} context.bodyEl - Preview body element
+ * @returns {Function} Cleanup function to remove event listeners
+ */
+function initPreviewPanel(panelEl, context) {
+  const { generateFunction, subjectEl, bodyEl } = context;
+  
+  // Get elements
+  const card = panelEl.querySelector('.preview-card');
+  const btnRegenerate = panelEl.querySelector('.btn-regenerate');
+  const statusLive = panelEl.querySelector('.mb-status-live');
+  
+  let isEditing = false;
+  
+  // Helper: Update aria-live status
+  function announceStatus(message) {
+    if (statusLive) {
+      statusLive.textContent = message;
+    }
+  }
+  
+  // Click-to-edit behavior
+  function handleCardClick(e) {
+    if (!isEditing && e.target === card) {
+      isEditing = true;
+      card.setAttribute('contenteditable', 'true');
+      card.focus();
+      card.classList.add('editing');
+      announceStatus('Editing preview. Press Escape to finish.');
+    }
+  }
+  
+  // Exit edit mode on blur
+  function handleCardBlur() {
+    if (isEditing) {
+      isEditing = false;
+      card.removeAttribute('contenteditable');
+      card.classList.remove('editing');
+      announceStatus('Preview editing finished.');
+    }
+  }
+  
+  // Keyboard shortcuts
+  function handleCardKeyDown(e) {
+    if (e.key === 'Escape' && isEditing) {
+      e.preventDefault();
+      card.blur(); // Triggers handleCardBlur
+    }
+  }
+  
+  // Regenerate button click
+  async function handleRegenerate(e) {
+    e.preventDefault();
+    
+    try {
+      // Show loading state
+      btnRegenerate.classList.add('loading');
+      btnRegenerate.disabled = true;
+      announceStatus('Generating new preview...');
+      
+      // Call existing generation function
+      await generateFunction();
+      
+      // Reset button state
+      btnRegenerate.classList.remove('loading');
+      btnRegenerate.disabled = false;
+      announceStatus('Preview updated.');
+      
+    } catch (error) {
+      console.error('[MailBot Preview] Regenerate error:', error);
+      btnRegenerate.classList.remove('loading');
+      btnRegenerate.disabled = false;
+      announceStatus('Regeneration failed. Please try again.');
+    }
+  }
+  
+  // Attach event listeners
+  card?.addEventListener('click', handleCardClick);
+  card?.addEventListener('blur', handleCardBlur);
+  card?.addEventListener('keydown', handleCardKeyDown);
+  btnRegenerate?.addEventListener('click', handleRegenerate);
+  
+  // Add visible animation class
+  setTimeout(() => {
+    panelEl.classList.add('mailbot-visible');
+  }, 10);
+  
+  // Cleanup function
+  return () => {
+    card?.removeEventListener('click', handleCardClick);
+    card?.removeEventListener('blur', handleCardBlur);
+    card?.removeEventListener('keydown', handleCardKeyDown);
+    btnRegenerate?.removeEventListener('click', handleRegenerate);
+    console.log('[MailBot Preview] Event listeners cleaned up');
   };
 }
 
@@ -3519,7 +4048,7 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
       return;
     }
     
-    // Hide the default reply UI (Compose | Summarize pill)
+    // Hide the default floating UI (not needed for compose-from-scratch)
     const dualPill = container.querySelector('.mailbot-dual-pill');
     const expandedPanel = container.querySelector('.mailbot-expanded');
     const previewContainer = container.querySelector('.mailbot-preview-container');
@@ -3528,57 +4057,147 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
     if (expandedPanel) expandedPanel.style.display = 'none';
     if (previewContainer) previewContainer.style.display = 'none';
     
+    // Also hide the floating container completely
+    if (container) container.style.display = 'none';
+    
     // Prevent duplicate panels
     if (dialog.querySelector('.mailbot-compose-panel')) {
       console.log('[MailBot Compose] Panel already exists in this compose');
       return;
     }
     
-    // Create compact compose panel with semantic CSS classes
+    // Create expanded compose panel (default state)
     const composePanel = document.createElement('div');
-    composePanel.className = 'mailbot-compose-panel';
+    composePanel.className = 'mailbot-compose-panel mailbot-expanded';
+    composePanel.setAttribute('data-state', 'expanded');
     
     composePanel.innerHTML = `
-      <label class="mb-label">What do you want to say?</label>
-      <input type="text" class="mb-intent-input" placeholder="Your thoughts..." />
-      <div class="mb-actions">
-        <button class="mb-action-btn mb-generate-btn">Generate</button>
-        <button class="mb-action-btn mb-insert-btn" disabled>Insert</button>
-        <button class="mb-back-btn">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M10 2L4 8L10 14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
+      <div class="mb-input-section">
+        <label class="mb-label">
+          💬 What do you want to say?
+        </label>
+        <input type="text" class="mb-intent-input" placeholder="Type your thoughts..." />
+      </div>
+      <div class="mb-button-section">
+        <div class="mb-actions">
+          <button class="mb-action-btn mb-generate-btn">
+            Generate
+            <span class="mailbot-loading-dot" aria-hidden="true"></span>
+          </button>
+          <button class="mb-action-btn mb-insert-btn" disabled>
+            Insert
+            <span class="mailbot-loading-dot" aria-hidden="true"></span>
+          </button>
+          <button class="mb-back-btn" title="Minimize">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M10 2L4 8L10 14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Back
+          </button>
+        </div>
       </div>
     `;
     
-    // Create preview panel using CSS classes
+    // Create inline pill (minimized state) - initially hidden
+    const inlinePill = document.createElement('div');
+    inlinePill.className = 'mailbot-compose-pill mailbot-inline';
+    inlinePill.style.display = 'none';
+    inlinePill.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 6px;">
+        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+      </svg>
+      <span>Compose</span>
+    `;
+    
+    // Create preview panel with polished UI matching compose panel
     const composePreview = document.createElement('div');
-    composePreview.className = 'mailbot-compose-preview';
+    composePreview.className = 'mailbot-preview-panel';
+    composePreview.setAttribute('role', 'region');
+    composePreview.setAttribute('aria-label', 'MailBot preview panel');
     composePreview.style.display = 'none'; // Hidden initially
     
     composePreview.innerHTML = `
-      <div class="mb-preview-header">
-        <span class="mb-preview-label">Preview (click to edit):</span>
-        <button class="mb-regenerate-btn">Regenerate</button>
+      <div class="preview-header">
+        <span class="preview-title">Preview (click to edit):</span>
+        <button class="btn-regenerate mb-action-btn" aria-label="Regenerate draft">
+          Regenerate
+          <span class="mailbot-loading-dot" aria-hidden="true"></span>
+        </button>
       </div>
-      <div class="mb-preview-content">
-        <div style="margin-bottom: 8px;">
-          <strong style="color: rgba(255,255,255,0.6);">Subject:</strong>
-          <div class="mb-preview-subject" contenteditable="true"></div>
+      <div class="preview-card" role="article" tabindex="0">
+        <div class="preview-subject-section">
+          <strong class="preview-label">Subject:</strong>
+          <div class="preview-subject"></div>
         </div>
-        <div>
-          <strong style="color: rgba(255,255,255,0.6);">Body:</strong>
-          <div class="mb-preview-body" contenteditable="true"></div>
+        <div class="preview-body-section">
+          <strong class="preview-label">Body:</strong>
+          <div class="preview-body"></div>
         </div>
       </div>
+      <div class="mb-status-live" role="status" aria-live="polite" aria-atomic="true" style="position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden;"></div>
     `;
     
-    // Position and attach both panels using the new positioning system
-    const cleanupPanelPosition = positionPanelBesideCompose(dialog, composePanel, {
-      padding: 8,
-      maxWidth: 420
+    // Append inline pill to dialog (positioned at bottom-right)
+    dialog.appendChild(inlinePill);
+    
+    // Style inline pill for bottom-right positioning
+    inlinePill.style.position = 'absolute';
+    inlinePill.style.bottom = '60px'; // Above Gmail toolbar
+    inlinePill.style.right = '20px';
+    inlinePill.style.zIndex = '1000';
+    
+    // Position and attach expanded panel using smart left-first placement
+    const cleanupPanelPosition = smartPlacePanel(dialog, composePanel, {
+      padding: 12,
+      maxWidth: 380,
+      minWidth: 280
     });
+    
+    // Adaptive compact sizing - measures content and clamps to available space
+    const cleanupPanelResize = shrinkPanelToContent(dialog, composePanel, {
+      minWidth: 280,
+      maxWidth: 380,
+      hPadding: 20
+    });
+    
+    // Watch compose DOM changes (header resizing, fields changing) to recompute panel size
+    // Throttled heavily to prevent performance issues
+    let composeDOMTimeout;
+    const composeDOMObserver = new MutationObserver(() => {
+      clearTimeout(composeDOMTimeout);
+      composeDOMTimeout = setTimeout(() => {
+        // Re-run positioning when compose structure changes
+        const computeEvent = new CustomEvent('mailbot-recompute');
+        composePanel.dispatchEvent(computeEvent);
+      }, 300); // Increased throttle to 300ms
+    });
+    // Only watch childList, not attributes or characterData
+    composeDOMObserver.observe(dialog, { childList: true, subtree: false, attributes: false });
+    
+    // Watch for compose dialog removal and call cleanup
+    // @acceptance_test Cleanup function is called when compose closes
+    const composeCloseObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.removedNodes.forEach((node) => {
+          if (node === dialog || (node.contains && node.contains(dialog))) {
+            console.log('[MailBot Compose] Compose dialog closed, cleaning up');
+            clearTimeout(composeDOMTimeout);
+            clearTimeout(previewResizeTimeout);
+            composeDOMObserver.disconnect();
+            window.removeEventListener('resize', handlePreviewResize);
+            cleanupPanelPosition();
+            cleanupPanelResize();
+            if (cleanupPreviewPanel) cleanupPreviewPanel();
+            composeCloseObserver.disconnect();
+          }
+        });
+      });
+    });
+    
+    // Observe parent for removal of compose dialog
+    if (dialog.parentElement) {
+      composeCloseObserver.observe(dialog.parentElement, { childList: true });
+    }
     
     // Attach preview panel to compose dialog below the main panel
     dialog.appendChild(composePreview);
@@ -3588,6 +4207,7 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
       if (composePreview.style.display !== 'none') {
         const panelRect = composePanel.getBoundingClientRect();
         const dialogRect = dialog.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
         
         // Calculate position relative to dialog
         const relativeTop = panelRect.bottom - dialogRect.top + 8; // 8px gap
@@ -3618,8 +4238,34 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
           composePreview.style.maxWidth = '500px';
           composePreview.style.transform = 'translateX(-50%)';
         }
+        
+        // Viewport clamping: Calculate available space and adjust preview height
+        const previewTopInViewport = panelRect.bottom + 8;
+        const availableHeight = viewportHeight - previewTopInViewport - 20; // 20px bottom padding
+        
+        // Get preview card element for height control (contains both subject and body)
+        const previewCard = composePreview.querySelector('.preview-card');
+        if (previewCard && availableHeight > 100) {
+          // Set max-height to fit within viewport
+          // Account for preview header (~50px), padding, and borders
+          const maxCardHeight = Math.max(150, Math.min(availableHeight - 60, 40 * viewportHeight / 100));
+          previewCard.style.maxHeight = `${maxCardHeight}px`;
+          previewCard.style.overflowY = 'auto';
+        }
       }
     }
+    
+    // Add resize listener to reposition preview when viewport changes
+    let previewResizeTimeout;
+    const handlePreviewResize = () => {
+      clearTimeout(previewResizeTimeout);
+      previewResizeTimeout = setTimeout(() => {
+        if (composePreview.classList.contains('mailbot-visible')) {
+          positionPreview();
+        }
+      }, 150);
+    };
+    window.addEventListener('resize', handlePreviewResize);
     
     // State to hold generated draft
     let generatedDraft = null;
@@ -3629,12 +4275,27 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
     const generateBtn = composePanel.querySelector('.mb-generate-btn');
     const insertBtn = composePanel.querySelector('.mb-insert-btn');
     const backBtn = composePanel.querySelector('.mb-back-btn');
-    const regenerateBtn = composePreview.querySelector('.mb-regenerate-btn');
-    const previewSubject = composePreview.querySelector('.mb-preview-subject');
-    const previewBody = composePreview.querySelector('.mb-preview-body');
+    
+    // Preview panel elements
+    const previewSubject = composePreview.querySelector('.preview-subject');
+    const previewBody = composePreview.querySelector('.preview-body');
+    const btnRegenerate = composePreview.querySelector('.btn-regenerate');
+    
+    // Enter key on intent input triggers generate
+    intentInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        generateBtn.click();
+      }
+    });
     
     // Generate button click
     generateBtn.addEventListener('click', async () => {
+      console.log('[MailBot Compose] Generate button clicked');
+      console.log('[MailBot Compose] Button disabled?', generateBtn.disabled);
+      console.log('[MailBot Compose] Panel display:', composePanel.style.display);
+      console.log('[MailBot Compose] Panel opacity:', composePanel.style.opacity);
+      
       try {
         const intent = intentInput.value.trim();
         
@@ -3648,38 +4309,17 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
         
         console.log('[MailBot Compose] Generating draft for intent:', intent);
         
-        // Show loading state
-        generateBtn.textContent = 'Generating...';
+        // Show loading state with class
+        generateBtn.classList.add('loading');
         generateBtn.disabled = true;
         generateBtn.style.opacity = '0.7';
         generateBtn.style.cursor = 'not-allowed';
         
-        // PHASE A: Simulate generation with setTimeout
-        await new Promise(resolve => setTimeout(resolve, 700));
-        
-        // PHASE A: Generate mock subject and body
-        generatedDraft = {
-          subject: `Re: ${intent.substring(0, 50)}${intent.length > 50 ? '...' : ''}`,
-          body: `Hello,\n\n${intent}\n\nBest regards,\n[Your Name]`
-        };
-        
-        console.log('[MailBot Compose] Generated draft:', generatedDraft);
-        
-        // Show preview
-        previewSubject.textContent = generatedDraft.subject;
-        previewBody.textContent = generatedDraft.body;
-        composePreview.style.display = 'block';
-        
-        // Position preview below compact panel
-        positionPreview();
-        
-        // Enable Insert button
-        insertBtn.disabled = false;
-        insertBtn.style.opacity = '1';
-        insertBtn.style.cursor = 'pointer';
+        // Use the shared performGeneration function
+        await performGeneration();
         
         // Reset Generate button
-        generateBtn.textContent = 'Generate';
+        generateBtn.classList.remove('loading');
         generateBtn.disabled = false;
         generateBtn.style.opacity = '1';
         generateBtn.style.cursor = 'pointer';
@@ -3688,7 +4328,7 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
         
       } catch (error) {
         console.error('[MailBot Compose] Generation error:', error);
-        generateBtn.textContent = 'Generate';
+        generateBtn.classList.remove('loading');
         generateBtn.disabled = false;
         generateBtn.style.opacity = '1';
         generateBtn.style.cursor = 'pointer';
@@ -3696,117 +4336,356 @@ function detectAndAttachComposeUI(editableField, container, messageMetadata) {
       }
     });
     
-    // Regenerate button click
-    regenerateBtn.addEventListener('click', async () => {
-      try {
-        const intent = intentInput.value.trim();
-        
-        if (!intent) return;
-        
-        console.log('[MailBot Compose] Regenerating draft');
-        
-        regenerateBtn.textContent = 'Regenerating...';
-        regenerateBtn.disabled = true;
-        regenerateBtn.style.opacity = '0.7';
-        
-        // PHASE A: Simulate regeneration
-        await new Promise(resolve => setTimeout(resolve, 700));
-        
-        // Generate different mock content
-        generatedDraft = {
-          subject: `About: ${intent.substring(0, 50)}${intent.length > 50 ? '...' : ''}`,
-          body: `Hi there,\n\n${intent}\n\nThank you,\n[Your Name]`
-        };
-        
-        previewSubject.textContent = generatedDraft.subject;
-        previewBody.textContent = generatedDraft.body;
-        
-        // Reposition preview
-        positionPreview();
-        
-        regenerateBtn.textContent = 'Regenerate';
-        regenerateBtn.disabled = false;
-        regenerateBtn.style.opacity = '1';
-        
-        console.log('[MailBot Compose] Draft regenerated');
-        
-      } catch (error) {
-        console.error('[MailBot Compose] Regeneration error:', error);
-        regenerateBtn.textContent = 'Regenerate';
-        regenerateBtn.disabled = false;
-        regenerateBtn.style.opacity = '1';
+    // Shared generation function for reuse
+    async function performGeneration() {
+      const intent = intentInput.value.trim();
+      if (!intent) {
+        throw new Error('Intent is required');
       }
+      
+      console.log('[MailBot Compose] Generating draft for intent:', intent);
+      
+      // Call AI generation
+      const threadContext = extractThreadContext(editableField);
+      
+      // Get default tone from storage
+      const { defaultTone } = await chrome.storage.local.get(['defaultTone']);
+      const tone = defaultTone || 'neutral';
+      
+      console.log('[MailBot Compose] Calling AI with context...');
+      let result = await generateWithAI(
+        threadContext,
+        intent,
+        tone,
+        1 // Attempt 1
+      );
+      
+      // Check validation and retry if needed
+      if (!result.validation.isValid && result.attemptNumber < 2) {
+        console.warn('[MailBot Compose] Validation failed, retrying...');
+        result = await generateWithAI(
+          threadContext,
+          intent,
+          tone,
+          2 // Attempt 2
+        );
+      }
+      
+      console.log('[MailBot Compose] AI generation complete');
+      
+      // Add signature if configured
+      const settings = await chrome.storage.local.get(['fullName', 'title', 'contactNumber']);
+      const signatureParts = [];
+      if (settings.fullName && settings.fullName.trim()) {
+        signatureParts.push(settings.fullName.trim());
+      }
+      if (settings.title && settings.title.trim()) {
+        signatureParts.push(settings.title.trim());
+      }
+      if (settings.contactNumber && settings.contactNumber.trim()) {
+        signatureParts.push(settings.contactNumber.trim());
+      }
+      
+      let finalBody = result.text;
+      
+      // Add signature if configured
+      if (signatureParts.length > 0 && settings.fullName) {
+        const signature = signatureParts.join('\n');
+        const lines = result.text.trim().split('\n');
+        const nameParts = settings.fullName.toLowerCase().split(/\s+/);
+        
+        // Check if AI already added name in closing
+        const lastFewLines = lines.slice(-3).join('\n').toLowerCase();
+        const hasName = nameParts.some(part => part.length > 2 && lastFewLines.includes(part));
+        
+        if (hasName) {
+          // Remove AI's name and add full signature
+          const filteredLines = lines.filter((line, index) => {
+            if (index < lines.length - 3) return true;
+            const lineLower = line.toLowerCase().trim();
+            return !nameParts.some(part => part.length > 2 && lineLower.includes(part));
+          });
+          finalBody = `${filteredLines.join('\n')}\n\n${signature}`;
+        } else {
+          finalBody = `${result.text}\n\n${signature}`;
+        }
+      }
+      
+      // Generate proper subject line
+      let subject;
+      if (threadContext.subject && threadContext.subject !== 'No subject') {
+        subject = threadContext.subject;
+      } else {
+        // Ask AI to generate a subject line
+        console.log('[MailBot Compose] Generating subject line...');
+        const subjectPrompt = `Based on this email content, write ONLY a short, professional subject line (3-6 words max).
+
+Rules:
+- NO names (sender or recipient)
+- NO quotes or punctuation at the end
+- NO "Subject:" prefix
+- Just the topic/purpose
+
+Email content:
+${finalBody.substring(0, 300)}
+
+Subject line:`;
+        
+        try {
+          const subjectSession = await LanguageModel.create({ 
+            systemPrompt: 'You generate concise email subject lines. Output ONLY the subject line without names, quotes, or prefixes.' 
+          });
+          const generatedSubject = await subjectSession.prompt(subjectPrompt);
+          subjectSession.destroy();
+          
+          // Clean up subject (remove quotes, "Subject:", names, etc.)
+          subject = generatedSubject
+            .replace(/^(Subject:|Re:|Fwd:)\s*/i, '')
+            .replace(/^["']|["']$/g, '')
+            .replace(/\s*-\s*.+$/, '') // Remove " - Name" patterns
+            .trim();
+          
+          console.log('[MailBot Compose] Generated subject:', subject);
+        } catch (error) {
+          console.warn('[MailBot Compose] Failed to generate subject, using fallback');
+          subject = intent.substring(0, 50) + (intent.length > 50 ? '...' : '');
+        }
+      }
+      
+      generatedDraft = {
+        subject: subject,
+        body: finalBody
+      };
+      
+      // Update preview
+      previewSubject.textContent = generatedDraft.subject;
+      previewBody.textContent = generatedDraft.body;
+      
+      console.log('[MailBot Compose] Preview panel before show:', {
+        display: composePreview.style.display,
+        opacity: composePreview.style.opacity,
+        transition: composePreview.style.transition,
+        hasVisibleClass: composePreview.classList.contains('mailbot-visible'),
+        computedDisplay: window.getComputedStyle(composePreview).display,
+        computedOpacity: window.getComputedStyle(composePreview).opacity
+      });
+      
+      // Show preview with proper animation - clear ALL inline styles first
+      composePreview.style.display = 'block';
+      composePreview.style.opacity = '';
+      composePreview.style.transform = '';
+      composePreview.style.transition = '';
+      composePreview.classList.add('mailbot-visible');
+      
+      console.log('[MailBot Compose] Preview panel after show:', {
+        display: composePreview.style.display,
+        opacity: composePreview.style.opacity,
+        hasVisibleClass: composePreview.classList.contains('mailbot-visible'),
+        computedDisplay: window.getComputedStyle(composePreview).display,
+        computedOpacity: window.getComputedStyle(composePreview).opacity
+      });
+      
+      positionPreview();
+      
+      // Enable insert button
+      insertBtn.disabled = false;
+      
+      return generatedDraft;
+    }
+    
+    // Shared insert function for reuse
+    async function performInsertion() {
+      if (!generatedDraft) {
+        console.warn('[MailBot Compose] No draft to insert');
+        return;
+      }
+      
+      console.log('[MailBot Compose] Inserting draft into Gmail');
+      
+      // Get potentially edited content from preview
+      const finalSubject = previewSubject.textContent.trim();
+      const finalBody = previewBody.textContent.trim();
+      
+      // Insert subject
+      if (subjectField && finalSubject) {
+        subjectField.value = finalSubject;
+        subjectField.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      
+      // Insert body with proper line breaks
+      if (editableField && finalBody) {
+        editableField.innerHTML = '';
+        
+        // Split by newlines and create proper structure
+        const lines = finalBody.split('\n');
+        lines.forEach((line, index) => {
+          const textNode = document.createTextNode(line);
+          editableField.appendChild(textNode);
+          
+          // Add line break after each line except the last
+          if (index < lines.length - 1) {
+            editableField.appendChild(document.createElement('br'));
+          }
+        });
+        
+        editableField.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      
+      // Hide preview and collapse to pill
+      composePreview.classList.remove('mailbot-visible');
+      composePreview.style.display = 'none';
+      collapsePanelToInline(composePanel, composePreview, inlinePill);
+      
+      console.log('[MailBot Compose] Draft inserted successfully');
+    }
+    
+    // Initialize preview panel with interactive behaviors
+    let cleanupPreviewPanel = null;
+    
+    // Regenerate button in preview (legacy support)
+    if (btnRegenerate) {
+      btnRegenerate.addEventListener('click', async () => {
+        try {
+          const intent = intentInput.value.trim();
+          if (!intent) return;
+          
+          console.log('[MailBot Compose] Regenerating draft');
+          
+          btnRegenerate.classList.add('loading');
+          btnRegenerate.disabled = true;
+          
+          await performGeneration();
+          
+          btnRegenerate.classList.remove('loading');
+          btnRegenerate.disabled = false;
+          
+          console.log('[MailBot Compose] Draft regenerated');
+          
+        } catch (error) {
+          console.error('[MailBot Compose] Regeneration error:', error);
+          btnRegenerate.classList.remove('loading');
+          btnRegenerate.disabled = false;
+        }
+      });
+    }
+    
+    // Wire up preview panel behaviors
+    cleanupPreviewPanel = initPreviewPanel(composePreview, {
+      generateFunction: performGeneration,
+      subjectEl: previewSubject,
+      bodyEl: previewBody
     });
     
-    // Insert button click
-    insertBtn.addEventListener('click', () => {
+    // Insert button click (from compose panel)
+    insertBtn.addEventListener('click', async () => {
       try {
-        if (!generatedDraft) {
-          console.warn('[MailBot Compose] No draft to insert');
-          return;
-        }
-        
-        console.log('[MailBot Compose] Inserting draft into Gmail');
-        
-        // Get edited content from preview (user may have edited it)
-        const finalSubject = previewSubject.textContent.trim();
-        const finalBody = previewBody.textContent.trim();
-        
-        // Insert subject
-        if (subjectField && finalSubject) {
-          subjectField.value = finalSubject;
-          // Trigger input event so Gmail recognizes the change
-          subjectField.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-        
-        // Insert body
-        if (editableField && finalBody) {
-          // Clear existing content
-          editableField.innerHTML = '';
-          
-          // Insert line by line
-          const lines = finalBody.split('\n');
-          lines.forEach((line, index) => {
-            const textNode = document.createTextNode(line);
-            editableField.appendChild(textNode);
-            
-            if (index < lines.length - 1) {
-              editableField.appendChild(document.createElement('br'));
-            }
-          });
-          
-          // Trigger input event
-          editableField.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-        
-        // Collapse UI
-        composePanel.style.display = 'none';
-        composePreview.style.display = 'none';
-        
-        console.log('[MailBot Compose] ✓ Draft inserted successfully');
-        
+        await performInsertion();
       } catch (error) {
         console.error('[MailBot Compose] Insert error:', error);
         alert('Failed to insert draft: ' + error.message);
       }
     });
     
-    // Back button click - cleanup and hide
+    // Back button click - collapse to inline pill
     backBtn.addEventListener('click', () => {
-      // Clean up positioning observers
-      if (typeof cleanupPanelPosition === 'function') {
-        cleanupPanelPosition();
+      collapsePanelToInline(composePanel, composePreview, inlinePill);
+    });
+    
+    // Inline pill click - expand back to full panel
+    inlinePill.addEventListener('click', () => {
+      expandPanelFromInline(composePanel, composePreview, inlinePill, cleanupPanelPosition);
+    });
+    
+    // Helper: Collapse to inline pill
+    function collapsePanelToInline(panel, preview, pill) {
+      panel.setAttribute('data-state', 'collapsed');
+      
+      // Fade out expanded panel and preview
+      panel.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+      panel.style.opacity = '0';
+      panel.style.transform = 'translateY(-10px)';
+      
+      if (preview.style.display !== 'none') {
+        preview.classList.remove('mailbot-visible');
+        preview.style.transition = 'opacity 0.2s ease';
+        preview.style.opacity = '0';
       }
       
-      // Hide panels
-      composePanel.style.display = 'none';
-      composePreview.style.display = 'none';
+      setTimeout(() => {
+        panel.style.display = 'none';
+        preview.style.display = 'none';
+        
+        // Clear inline styles from preview
+        preview.style.opacity = '';
+        preview.style.transition = '';
+        preview.style.transform = '';
+        
+        // Show inline pill with fade-in
+        pill.style.display = 'flex';
+        pill.style.opacity = '0';
+        pill.style.transition = 'opacity 0.2s ease';
+        
+        // Trigger reflow
+        pill.offsetHeight;
+        
+        pill.style.opacity = '1';
+        
+        console.log('[MailBot Compose] Collapsed to inline pill');
+      }, 200);
+    }
+    
+    // Helper: Expand from inline pill
+    function expandPanelFromInline(panel, preview, pill, positionCleanup) {
+      panel.setAttribute('data-state', 'expanded');
       
-      // Show default reply UI
-      if (dualPill) dualPill.style.display = '';
+      // Fade out pill
+      pill.style.transition = 'opacity 0.2s ease';
+      pill.style.opacity = '0';
       
-      console.log('[MailBot Compose] Closed compose UI');
-    });
+      setTimeout(() => {
+        pill.style.display = 'none';
+        
+        // Show expanded panel with fade-in
+        panel.style.display = 'flex';
+        panel.style.opacity = '0';
+        panel.style.transform = 'translateY(-10px)';
+        
+        // Trigger reflow
+        panel.offsetHeight;
+        
+        panel.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+        panel.style.opacity = '1';
+        panel.style.transform = 'translateY(0)';
+        
+        // After animation completes, clear inline styles to prevent issues
+        setTimeout(() => {
+          panel.style.transition = '';
+          panel.style.opacity = '';
+          panel.style.transform = '';
+          
+          // Trigger recompute of panel position to ensure correct placement
+          const computeEvent = new CustomEvent('mailbot-recompute');
+          panel.dispatchEvent(computeEvent);
+          
+          // Reset button states to ensure they're interactive
+          if (generateBtn) {
+            generateBtn.disabled = false;
+            generateBtn.classList.remove('loading');
+            generateBtn.style.opacity = '1';
+            generateBtn.style.cursor = 'pointer';
+            console.log('[MailBot Compose] Reset generate button state');
+          }
+          
+          // Ensure intent input is enabled
+          if (intentInput) {
+            intentInput.disabled = false;
+            intentInput.style.pointerEvents = '';
+          }
+        }, 200);
+        
+        console.log('[MailBot Compose] Expanded from inline pill');
+      }, 200);
+    }
     
     console.log('[MailBot Compose] ✓ Compose UI attached successfully');
     

@@ -13,31 +13,33 @@ const DEFAULT_SETTINGS = {
 
 // Show status message
 function showStatus(message, isError = false) {
-  const statusEl = document.getElementById('status-message');
   const saveBtn = document.getElementById('save-btn');
   
-  statusEl.textContent = message;
-  statusEl.className = `status-message ${isError ? 'error' : 'success'}`;
-  
-  // Change button appearance temporarily on success
+  // Just change button appearance (green glow) on success
   if (!isError) {
+    saveBtn.classList.add('success');
     saveBtn.textContent = '✓ Saved!';
-    saveBtn.style.background = '#4CAF50';
     
     setTimeout(() => {
+      saveBtn.classList.remove('success');
       saveBtn.textContent = 'Save Settings';
-      saveBtn.style.background = '#000';
-    }, 2000);
+    }, 2500);
+  } else {
+    // Show error message briefly
+    const statusEl = document.getElementById('status-message');
+    statusEl.textContent = message;
+    statusEl.className = 'status-message error';
+    
+    setTimeout(() => {
+      statusEl.style.display = 'none';
+      statusEl.className = 'status-message';
+    }, 3000);
   }
-  
-  setTimeout(() => {
-    statusEl.style.display = 'none';
-    statusEl.className = 'status-message'; // Reset classes
-  }, 3000);
 }
 
 // Save settings
 document.getElementById('save-btn').addEventListener('click', async () => {
+  const saveBtn = document.getElementById('save-btn');
   const fullName = document.getElementById('full-name').value.trim();
   const title = document.getElementById('title').value.trim();
   const contactNumber = document.getElementById('contact-number').value.trim();
@@ -53,6 +55,10 @@ document.getElementById('save-btn').addEventListener('click', async () => {
     return;
   }
   
+  // Show loading state
+  saveBtn.classList.add('loading');
+  saveBtn.disabled = true;
+  
   // Parse and validate greetings (max 3)
   const greetings = preferredGreetings
     .split(',')
@@ -67,19 +73,27 @@ document.getElementById('save-btn').addEventListener('click', async () => {
     .filter(c => c.length > 0)
     .slice(0, 3);
   
-  // Save to storage
-  await chrome.storage.local.set({
-    fullName,
-    title,
-    contactNumber,
-    defaultTone,
-    emailLength,
-    preferredGreetings: greetings.join(', '),
-    preferredClosings: closings.join(', ')
-  });
-  
-  showStatus('✓ Settings saved!');
-  console.log('[MailBot] Settings saved:', { fullName, title, contactNumber, defaultTone, emailLength, greetings, closings });
+  try {
+    // Save to storage
+    await chrome.storage.local.set({
+      fullName,
+      title,
+      contactNumber,
+      defaultTone,
+      emailLength,
+      preferredGreetings: greetings.join(', '),
+      preferredClosings: closings.join(', ')
+    });
+    
+    showStatus('✓ Settings saved!');
+    console.log('[MailBot] Settings saved:', { fullName, title, contactNumber, defaultTone, emailLength, greetings, closings });
+  } catch (error) {
+    console.error('[MailBot] Save error:', error);
+    showStatus('⚠️ Failed to save settings', true);
+  } finally {
+    saveBtn.classList.remove('loading');
+    saveBtn.disabled = false;
+  }
 });
 
 // Load settings
